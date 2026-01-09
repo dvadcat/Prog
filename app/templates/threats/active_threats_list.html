@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Перечень актуальных угроз ИБ активов - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Перечень актуальных угроз ИБ активов</h2>
+        
+        <form method="POST" id="active-threats-form">
+            <div class="mb-3">
+                <label for="selected_asset" class="form-label">Выберите актив</label>
+                <select class="form-control" id="selected_asset" name="selected_asset" required>
+                    <option value="">Выберите актив...</option>
+                    <!-- Активы будут загружены через JavaScript -->
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mt-4" id="threats-table" style="display: none;">
+    <div class="col-12">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Актив</th>
+                    <th>Угроза</th>
+                </tr>
+            </thead>
+            <tbody id="threats-table-body">
+                <!-- Строки будут добавлены через JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+// Загрузка активов и угроз (только актуальные угрозы)
+Promise.all([
+    fetch('/api/assets/').then(response => response.json()),
+    fetch('/api/threats/?only_relevant=true').then(response => response.json())
+])
+.then(([assets, threats]) => {
+    const assetSelect = document.getElementById('selected_asset');
+    
+    // Очищаем селект
+    assetSelect.innerHTML = '<option value="">Выберите актив...</option>';
+    
+    // Добавляем активы в селект
+    assets.forEach(asset => {
+        const option = document.createElement('option');
+        option.value = asset.id;
+        option.textContent = asset.name;
+        option.dataset.name = asset.name;
+        assetSelect.appendChild(option);
+    });
+    
+    // Обработчик изменения выбранного актива
+    document.getElementById('selected_asset').addEventListener('change', function() {
+        const selectedAssetId = this.value;
+        if (selectedAssetId) {
+            const selectedAsset = assets.find(asset => asset.id == selectedAssetId);
+            
+            // Показываем таблицу
+            document.getElementById('threats-table').style.display = 'block';
+            
+            // Очищаем таблицу
+            const tbody = document.getElementById('threats-table-body');
+            tbody.innerHTML = '';
+            
+            // Добавляем строки для каждой угрозы
+            threats.forEach(threat => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${selectedAsset.name}</td>
+                    <td>
+                        <div class="form-check">
+                            <input class="form-check-input threat-checkbox" type="checkbox" id="threat_${threat.id}" value="${threat.id}" name="threats">
+                            <label class="form-check-label" for="threat_${threat.id}">${threat.name}</label>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else {
+            // Скрываем таблицу
+            document.getElementById('threats-table').style.display = 'none';
+        }
+    });
+})
+.catch(error => console.error('Ошибка загрузки данных:', error));
+</script>
+{% endblock %}

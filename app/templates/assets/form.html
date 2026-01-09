@@ -1,0 +1,671 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Редактирование актива' if asset else 'Создание актива' }} - Программное средство для оценки рисков ИБ{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>{{ 'Редактирование актива' if asset else 'Создание актива' }}</h2>
+            <form method="POST" id="asset-form" data-asset-context-id="{{ asset.context_id if asset else 'null' }}" data-selected-context-id="{{ selected_context_id if selected_context_id else 'null' }}" data-asset-id="{{ asset.id if asset else 'null' }}">
+                <!-- Вкладки для навигации -->
+                <ul class="nav nav-tabs" id="assetTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic" type="button" role="tab">Основная информация</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">Свойства ИБ</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="impact-tab" data-bs-toggle="tab" data-bs-target="#impact" type="button" role="tab">Ценность актива относительно нарушения свойств ИБ</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cost-tab" data-bs-toggle="tab" data-bs-target="#cost" type="button" role="tab">Стоимость и ценность</button>
+                    </li>
+                </ul>
+                <!-- Содержимое вкладок -->
+                <div class="tab-content" id="assetTabContent">
+                    <!-- Основная информация -->
+                    <div class="tab-pane fade show active" id="basic" role="tabpanel">
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="context_id" class="form-label">Область управления рисками</label>
+                                    <select class="form-control" id="context_id" name="context_id">
+                                        <option value="">Выберите область</option>
+                                        <!-- Области будут загружены через JavaScript -->
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="name" class="form-label">Наименование актива</label>
+                                    <input type="text" class="form-control" id="name" name="name" value="{{ asset.name if asset else '' }}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="type" class="form-label">Тип актива</label>
+                                    <select class="form-control" id="type" name="type" required>
+                                        <option value="information" {% if asset and asset.type == 'information' %}selected{% endif %}>Информационные активы</option>
+                                        <option value="software" {% if asset and asset.type == 'software' %}selected{% endif %}>Программные средства</option>
+                                        <option value="hardware" {% if asset and asset.type == 'hardware' %}selected{% endif %}>Аппаратные средства</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Описание</label>
+                                    <textarea class="form-control" id="description" name="description" rows="3">{{ asset.description if asset else '' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Свойства ИБ -->
+                    <div class="tab-pane fade" id="security" role="tabpanel">
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                <p><strong>Требуемые свойства информационной безопасности для активов:</strong></p>
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Актив</th>
+                                            <th>Конфиденциальность</th>
+                                            <th>Целостность</th>
+                                            <th>Доступность</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>{{ asset.name if asset else 'Новый актив' }}</td>
+                                            <td>
+                                                <select class="form-select" id="confidentiality" name="properties_confidentiality">
+                                                    <option value="-" {% if asset and asset.properties and '"confidentiality": false' in asset.properties %}selected{% endif %}>-</option>
+                                                    <option value="+" {% if asset and asset.properties and '"confidentiality": true' in asset.properties %}selected{% endif %}>+</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select" id="integrity" name="properties_integrity">
+                                                    <option value="-" {% if asset and asset.properties and '"integrity": false' in asset.properties %}selected{% endif %}>-</option>
+                                                    <option value="+" {% if asset and asset.properties and '"integrity": true' in asset.properties %}selected{% endif %}>+</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select" id="availability" name="properties_availability">
+                                                    <option value="-" {% if asset and asset.properties and '"availability": false' in asset.properties %}selected{% endif %}>-</option>
+                                                    <option value="+" {% if asset and asset.properties and '"availability": true' in asset.properties %}selected{% endif %}>+</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Оценка воздействия -->
+                    <div class="tab-pane fade" id="impact" role="tabpanel">
+        <div class="row mt-3">
+            <div class="col-md-12">
+                <!-- Ценность активов относительно нарушения свойств ИБ -->
+                <h6>Ценность активов относительно нарушения свойств ИБ</h6>
+                <div id="asset-value-ib-container">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr id="asset-value-ib-header">
+                                <th rowspan="2">Актив</th>
+                                <th rowspan="2">Свойства ИБ</th>
+                                <th colspan="0" id="impact-header">Величина ущерба по критериям влияния</th>
+                                <th rowspan="2">Ценность актива<br>относительно<br>нарушения<br>свойств ИБ</th>
+                            </tr>
+                            <tr id="asset-value-ib-subheader">
+                            </tr>
+                        </thead>
+                                        <tbody id="asset-value-ib-body">
+                                            <tr>
+                                                <td rowspan="3">{{ asset.name if asset else 'Новый актив' }}</td>
+                                                <td>Конфиденциальность</td>
+                                                <td rowspan="3" id="overall-max-cell"><span id="overall-max-value">-</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td>Целостность</td>
+                                            </tr>
+                                            <tr>
+                                                <td>Доступность</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <small class="form-text text-muted">Ценность актива относительно нарушения свойств ИБ определяется по максимальному из предыдущих столбцов</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Стоимость и ценность -->
+                    <div class="tab-pane fade" id="cost" role="tabpanel">
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div id="context-cost-scale-section">
+                                    <p><strong>Шкала стоимости актива:</strong></p>
+                                    <table class="table table-bordered">
+                                        <thead>
+                                            <tr>
+                                                <th>Качественная шкала</th>
+                                                <th>Минимальная стоимость</th>
+                                                <th>Средняя стоимость</th>
+                                                <th>Высокая стоимость</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="context-cost-scale-body">
+                                            <tr>
+                                                <td>Количественная шкала</td>
+                                                <td id="cost_scale_low_value">-</td>
+                                                <td id="cost_scale_medium_value">-</td>
+                                                <td id="cost_scale_high_value">-</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                    <div class="mb-3">
+                                        <small class="text-muted">Шкала стоимости актива будет загружена из выбранной области</small>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="asset_cost" class="form-label">Стоимость актива (тыс. руб.)</label>
+                                            <input type="number" class="form-control" id="asset_cost" name="asset_cost" step="0.01" value="{{ asset.asset_cost if asset and asset.asset_cost else '' }}">
+                                            <small class="form-text text-muted">Для автоматической оценки стоимости</small>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="asset_cost_rating" class="form-label">Оценка стоимости актива</label>
+                                            <select class="form-control" id="asset_cost_rating" name="asset_cost_rating">
+                                                <option value="" {% if not asset or not asset.asset_cost_rating %}selected{% endif %}>Не оценено</option>
+                                                <option value="низкая" {% if asset and asset.asset_cost_rating == 'низкая' %}selected{% endif %}>Низкая</option>
+                                                <option value="средняя" {% if asset and asset.asset_cost_rating == 'средняя' %}selected{% endif %}>Средняя</option>
+                                                <option value="высокая" {% if asset and asset.asset_cost_rating == 'высокая' %}selected{% endif %}>Высокая</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- Закрытие .tab-content -->
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">{{ 'Сохранить изменения' if asset else 'Создать актив' }}</button>
+                    <a href="/assets" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    // Функция для загрузки областей
+    function loadContexts() {
+        fetch('/api/contexts')
+            .then(response => response.json())
+            .then(data => {
+                const contextSelect = document.getElementById('context_id');
+                const form = document.getElementById('asset-form');
+                const assetContextId = form.getAttribute('data-asset-context-id');
+                const preselectedContextId = form.getAttribute('data-selected-context-id');
+                // Очищаем текущие опции
+                contextSelect.innerHTML = '<option value="">Выберите область</option>';
+                // Определяем ID области для выбора
+                let selectedContextId = assetContextId !== 'null' ? parseInt(assetContextId) : null;
+                if (!selectedContextId && preselectedContextId !== 'null') {
+                    selectedContextId = parseInt(preselectedContextId);
+                }
+                data.forEach(context => {
+                    const option = document.createElement('option');
+                    option.value = context.id;
+                    option.textContent = context.name;
+                    if (selectedContextId !== null && selectedContextId === context.id) {
+                        option.selected = true;
+                    }
+                    contextSelect.appendChild(option);
+                });
+                // Если область уже выбрана, загружаем её критерии
+                if (selectedContextId) {
+                    loadContextCriteria(selectedContextId);
+                }
+            });
+    }
+    // Функция для загрузки критериев из области
+    function loadContextCriteria(contextId) {
+        fetch(`/api/contexts/${contextId}`)
+            .then(response => response.json())
+            .then(context => {
+                if (context.selected_impact_criteria) {
+                    try {
+                        const selectedCriteria = JSON.parse(context.selected_impact_criteria);
+                        // Обновляем таблицу 8 с учетом выбранных критериев
+                        updateAssetValueTable(selectedCriteria);
+                    } catch (e) {
+                        console.error('Ошибка при разборе критериев контекста:', e);
+                    }
+                }
+                // Загружаем шкалу стоимости актива из контекста
+                if (context.asset_cost_scale) {
+                    try {
+                        const costScale = JSON.parse(context.asset_cost_scale);
+                        document.getElementById('cost_scale_low_value').textContent = costScale.low_value || '-';
+                        document.getElementById('cost_scale_medium_value').textContent = costScale.medium_value || '-';
+                        document.getElementById('cost_scale_high_value').textContent = costScale.high_value || '-';
+                    } catch (e) {
+                        console.error('Ошибка при разборе шкалы стоимости актива:', e);
+                    }
+                    updateMaxValues(); // Обновляем максимальные значения после загрузки критериев
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при загрузке критериев контекста:', error);
+            });
+    }
+    // Обработчик изменения выбора контекста
+    document.getElementById('context_id').addEventListener('change', function() {
+        const contextId = parseInt(this.value);
+        if (contextId) {
+            loadContextCriteria(contextId);
+        }
+    });
+    // Функция для инициализации видимости критериев при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        // Инициализация вкладок Bootstrap
+        var triggerTabList = [].slice.call(document.querySelectorAll('#assetTabs button'));
+        triggerTabList.forEach(function (triggerEl) {
+            var tabTrigger = new bootstrap.Tab(triggerEl);
+            triggerEl.addEventListener('click', function (event) {
+                event.preventDefault();
+                tabTrigger.show();
+            });
+        });
+        // Обработка переключения вкладок
+        document.querySelectorAll('#assetTabs button').forEach(function(tab) {
+            tab.addEventListener('shown.bs.tab', function (event) {
+                // Убедиться, что вкладка действительно активна
+                document.querySelectorAll('#assetTabs button').forEach(function(btn) {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+            });
+        });
+        // Загрузка контекстов и инициализация таблицы
+        loadContexts();
+        // Инициализация динамических шкал
+        setTimeout(updateMaxValues, 200); // Небольшая задержка для обновления DOM
+    });
+    // Функция для определения максимального значения ущерба
+    function getMaxValue(values) {
+        if (values.length === 0) return '-';
+        // Преобразуем значения в числа для сравнения: Н=1, С=2, В=3
+        const valueMap = { 'Н': 1, 'С': 2, 'В': 3 };
+        const maxValue = Math.max(...values.map(v => valueMap[v] || 0));
+        // Преобразуем обратно в буквенное обозначение
+        const maxValueKey = Object.keys(valueMap).find(key => valueMap[key] === maxValue);
+        return maxValueKey || '-';
+    }
+    // Функция для обновления максимальных значений в таблице 8
+    function updateMaxValues() {
+        // Собираем все значения из select'ов по всем строкам
+        const allValues = [];
+        const rows = document.querySelectorAll('#asset-value-ib-body tr');
+        rows.forEach(function(row, rowIndex) {
+            // Начинаем после названия свойства
+            const startIndex = rowIndex === 0 ? 2 : 1;
+            for (let i = startIndex; i < row.cells.length; i++) {
+                const cell = row.cells[i];
+                // Пропускаем ячейку с общим максимумом
+                if (cell.querySelector('#overall-max-value')) {
+                    continue;
+                }
+                const select = cell.querySelector('select');
+                if (select && select.value && select.value !== '') {
+                    allValues.push(select.value);
+                }
+            }
+        });
+
+        const overallMaxValue = getMaxValue(allValues);
+        const overallMaxElement = document.getElementById('overall-max-value');
+
+        if (overallMaxElement) {
+            overallMaxElement.textContent = overallMaxValue;
+            console.log('Updated overall max value with:', overallMaxValue);
+            // Вызываем обновление "Ценности без зависимостей" при изменении максимального значения
+            updateValueWithoutDependencies();
+        }
+    }
+    // Функция для обновления структуры таблицы 8 на основе критериев из контекста
+    function updateAssetValueTable(selectedCriteria) {
+        if (!selectedCriteria || !Array.isArray(selectedCriteria)) {
+            selectedCriteria = [];
+        }
+
+        const headerRow = document.getElementById('asset-value-ib-header');
+        const subheaderRow = document.getElementById('asset-value-ib-subheader');
+        const tbody = document.getElementById('asset-value-ib-body');
+        const impactHeader = document.getElementById('impact-header');
+
+        // Устанавливаем colspan для заголовка "Величина ущерба по критериям влияния"
+        impactHeader.setAttribute('colspan', selectedCriteria.length);
+
+        // Очищаем подзаголовки и добавляем новые
+        subheaderRow.innerHTML = '';
+        if (selectedCriteria.length > 0) {
+            selectedCriteria.forEach((criterion, index) => {
+                const th = document.createElement('th');
+                th.textContent = criterion;
+                th.title = criterion; // Полное название в тултипе
+                th.style.fontSize = '0.7em';
+                th.style.minWidth = '60px';
+                th.style.maxWidth = '100px';
+                th.style.wordWrap = 'break-word';
+                th.style.wordBreak = 'break-word';
+                th.style.textAlign = 'center';
+                th.style.verticalAlign = 'middle';
+                th.style.height = 'auto';
+                th.style.lineHeight = '1.2';
+                subheaderRow.appendChild(th);
+            });
+        } else {
+            // Если критериев нет, добавляем один пустой заголовок для сохранения структуры
+            const th = document.createElement('th');
+            th.textContent = 'Критерии';
+            th.style.fontSize = '0.8em';
+            subheaderRow.appendChild(th);
+        }
+
+        console.log('Starting to update asset value table with criteria:', selectedCriteria);
+        // Обновляем все строки тела таблицы
+        // Сохраняем оригинальные свойства до начала изменений
+        const rows = tbody.getElementsByTagName('tr');
+        console.log('Total rows before processing:', rows.length);
+        const originalProperties = [];
+        for (let i = 0; i < rows.length; i++) {
+            let property = '';
+            // Для первой строки (конфиденциальность) название свойства в ячейке 1
+            if (i === 0) {
+                property = rows[i].cells[1] ? rows[i].cells[1].textContent.toLowerCase().trim() : '';
+            }
+            // Для второй строки (целостность) название свойства в ячейке 0
+            else if (i === 1) {
+                property = rows[i].cells[0] ? rows[i].cells[0].textContent.toLowerCase().trim() : '';
+            }
+            // Для третьей строки (доступность) название свойства в ячейке 0
+            else if (i === 2) {
+                property = rows[i].cells[0] ? rows[i].cells[0].textContent.toLowerCase().trim() : '';
+            }
+            console.log('Row', i, 'original property:', property, 'cells count:', rows[i].cells.length);
+            originalProperties.push(property);
+        }
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const originalProperty = originalProperties[i];
+            console.log('Processing row', i, 'with cells count:', row.cells.length);
+            console.log('Original property for this row:', originalProperty);
+
+            // Находим ячейку с общим максимумом
+            let overallMaxCell = null;
+            for (let j = 0; j < row.cells.length; j++) {
+                if (row.cells[j].querySelector('#overall-max-value')) {
+                    overallMaxCell = row.cells[j];
+                    break;
+                }
+            }
+
+            // Удаляем все столбцы между названием свойства и общим столбцом
+            let startIndex = originalProperty.includes('конфиденциальность') ? 2 : 1;
+            if (row.cells.length > startIndex + 1) {
+                let cellsToRemove = [];
+                for (let j = startIndex; j < row.cells.length; j++) {
+                    if (row.cells[j] !== overallMaxCell) {
+                        cellsToRemove.push(row.cells[j]);
+                    }
+                }
+                console.log('Cells to remove:', cellsToRemove.length);
+                cellsToRemove.forEach(cell => {
+                    console.log('Removing cell');
+                    row.removeChild(cell);
+                });
+            }
+
+            if (selectedCriteria.length > 0) {
+                // Добавляем столбцы для каждого критерия
+                selectedCriteria.forEach((criterion, index) => {
+                    const td = document.createElement('td');
+                    const select = document.createElement('select');
+                    select.className = 'form-select form-select-sm';
+                    // Используем оригинальное свойство, сохраненное до любых изменений
+                    select.name = `${originalProperty}_criterion_${index + 1}`;
+
+                    const optionEmpty = document.createElement('option');
+                    optionEmpty.value = '';
+                    optionEmpty.textContent = '-';
+                    select.appendChild(optionEmpty);
+
+                    const optionLow = document.createElement('option');
+                    optionLow.value = 'Н';
+                    optionLow.textContent = 'Н';
+                    select.appendChild(optionLow);
+
+                    const optionMedium = document.createElement('option');
+                    optionMedium.value = 'С';
+                    optionMedium.textContent = 'С';
+                    select.appendChild(optionMedium);
+
+                    const optionHigh = document.createElement('option');
+                    optionHigh.value = 'В';
+                    optionHigh.textContent = 'В';
+                    select.appendChild(optionHigh);
+
+                    td.appendChild(select);
+                    // Вставляем перед общей ячейкой
+                    if (overallMaxCell) {
+                        row.insertBefore(td, overallMaxCell);
+                    } else {
+                        row.appendChild(td);
+                    }
+
+                    // Добавляем обработчик изменения
+                    select.addEventListener('change', function() {
+                        console.log('Select changed, calling updateMaxValues');
+                        updateMaxValues();
+                        updateValueWithoutDependencies();
+                    });
+
+                    // Также добавляем обработчик для изменения значения по умолчанию
+                    if (select.value && select.value !== '') {
+                        console.log('Initial value present, calling updateMaxValues');
+                        updateMaxValues();
+                        updateValueWithoutDependencies();
+                    }
+                });
+            }
+        }
+        updateMaxValues(); // Обновляем максимальные значения после завершения обновления таблицы
+    }
+
+    // Добавляем обработчики изменений для всех select в таблице 8 (обновлено для динамических столбцов)
+    // Обработчики теперь добавляются в функции updateAssetValueTable, когда создаются динамические столбцы
+    // Функция для вычисления максимального значения из двух
+    function calculateMaxValue(impactValue, costValue) {
+        // Преобразуем значения для сравнения
+        const valuePriority = { 'Н': 1, 'С': 2, 'В': 3 };
+        const costPriority = { 'низкая': 1, 'средняя': 2, 'высокая': 3 };
+        
+        // Если оба значения есть, выбираем максимальное
+        if (impactValue && costValue) {
+            // Преобразуем costValue к формату Н/С/В
+            let costAsImpactValue = impactValue;
+            if (costValue === 'низкая') costAsImpactValue = 'Н';
+            else if (costValue === 'средняя') costAsImpactValue = 'С';
+            else if (costValue === 'высокая') costAsImpactValue = 'В';
+            
+            // Сравниваем и возвращаем максимальное
+            if (valuePriority[impactValue] >= valuePriority[costAsImpactValue]) {
+                return impactValue;
+            } else {
+                return costAsImpactValue;
+            }
+        } else if (impactValue) {
+            return impactValue;
+        } else if (costValue) {
+            // Преобразуем costValue к формату Н/С/В
+            if (costValue === 'низкая') return 'Н';
+            else if (costValue === 'средняя') return 'С';
+            else if (costValue === 'высокая') return 'В';
+        }
+        return undefined; // или null, если оба значения отсутствуют
+    }
+    
+    // Функция для вычисления и отображения "Ценности без зависимостей"
+    function updateValueWithoutDependencies() {
+        // Получаем максимальное значение из "Величина ущерба по критериям влияния"
+        const impactValue = document.getElementById('overall-max-value').textContent.trim();
+        // Получаем "Оценка стоимости актива"
+        const costValue = document.getElementById('asset_cost_rating').value;
+        
+        // Вычисляем "Ценность без зависимостей" как максимальное из двух значений
+        const valueWithoutDependencies = calculateMaxValue(impactValue, costValue);
+        
+        // Здесь мы можем обновить какое-то поле или отобразить результат
+        console.log('Computed value_without_dependencies:', valueWithoutDependencies);
+    }
+    
+    // Добавляем обработчики изменений для всех select в таблице 8 (обновлено для динамических столбцов)
+    // Обработчики теперь добавляются в функции updateAssetValueTable, когда создаются динамические столбцы
+    // Также добавляем обработчик для изменения "Оценки стоимости актива"
+    document.getElementById('asset_cost_rating').addEventListener('change', function() {
+        console.log('Asset cost rating changed, calling updateValueWithoutDependencies');
+        updateValueWithoutDependencies();
+    });
+    
+    // Обработчик отправки формы
+    document.getElementById('asset-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Валидация: проверяем выбрана ли область
+        const contextSelect = document.getElementById('context_id');
+        if (!contextSelect.value) {
+            showNotification('Выберите область управления рисками', 'warning');
+            // Переключаемся на первую вкладку
+            const basicTab = document.getElementById('basic-tab');
+            if (basicTab) {
+                basicTab.click();
+            }
+            contextSelect.focus();
+            return;
+        }
+        
+        // Собираем свойства ИБ
+        const properties = {
+            confidentiality: document.getElementById('confidentiality').value === '+',
+            integrity: document.getElementById('integrity').value === '+',
+            availability: document.getElementById('availability').value === '+'
+        };
+        
+        let contextId = parseInt(contextSelect.value);
+        // Если контекст не выбран, но есть предварительно выбранный контекст, используем его
+        if (isNaN(contextId) || contextId === 0) {
+            const form = document.getElementById('asset-form');
+            const preselectedContextId = form.getAttribute('data-selected-context-id');
+            if (preselectedContextId && preselectedContextId !== 'null') {
+                contextId = parseInt(preselectedContextId);
+            }
+        }
+        
+        // Собираем данные из таблицы 8 (воздействие на свойства ИБ)
+        const securityPropertyImpacts = [];
+        const rows = document.querySelectorAll('#asset-value-ib-body tr');
+        
+        rows.forEach(function(row, rowIndex) {
+            let securityProperty = '';
+            if (rowIndex === 0) securityProperty = 'confidentiality';
+            else if (rowIndex === 1) securityProperty = 'integrity';
+            else if (rowIndex === 2) securityProperty = 'availability';
+            
+            // Начинаем после названия свойства
+            const startIndex = rowIndex === 0 ? 2 : 1;
+            for (let i = startIndex; i < row.cells.length; i++) {
+                const cell = row.cells[i];
+                // Пропускаем ячейку с общим максимумом
+                if (cell.querySelector('#overall-max-value')) {
+                    continue;
+                }
+                const select = cell.querySelector('select');
+                if (select && select.value && select.value !== '') {
+                    // Получаем индекс критерия из name атрибута
+                    const criterionMatch = select.name.match(/_criterion_(\d+)/);
+                    if (criterionMatch) {
+                        const criterionIndex = parseInt(criterionMatch[1]) - 1;
+                        securityPropertyImpacts.push({
+                            security_property: securityProperty,
+                            criterion_index: criterionIndex,
+                            impact_value: select.value
+                        });
+                    }
+                }
+            }
+        });
+        
+        // Получаем максимальное значение из "Величина ущерба по критериям влияния"
+        const impactValue = document.getElementById('overall-max-value').textContent.trim();
+        // Получаем "Оценка стоимости актива"
+        const costValue = document.getElementById('asset_cost_rating').value;
+        
+        // Вычисляем "Ценность без зависимостей" как максимальное из двух значений
+        const valueWithoutDependencies = calculateMaxValue(impactValue, costValue);
+        
+        const form = document.getElementById('asset-form');
+        const assetId = form.getAttribute('data-asset-id');
+        let requestUrl, method;
+        if (assetId !== 'null') {
+            // Редактирование
+            requestUrl = `/api/assets/${assetId}`;
+            method = 'PUT';
+        } else {
+            // Создание
+            requestUrl = '/api/assets';
+            method = 'POST';
+        }
+        
+        const formData = {
+            context_id: contextId,
+            name: document.getElementById('name').value,
+            description: document.getElementById('description').value,
+            type: document.getElementById('type').value,
+            properties: JSON.stringify(properties),
+            impact_score: 0, // будет вычислено автоматически
+            impact_matrix: document.getElementById('impact_matrix') ? document.getElementById('impact_matrix').value : '{}',
+            cost_value: document.getElementById('cost_value') && document.getElementById('cost_value').value ? document.getElementById('cost_value').value : undefined,
+            value_without_dependencies: valueWithoutDependencies,
+            final_value: document.getElementById('final_value') && document.getElementById('final_value').value ? document.getElementById('final_value').value : undefined,
+            business_process_impact: document.getElementById('business_process_impact') ? document.getElementById('business_process_impact').value : '',
+            legal_requirements_impact: document.getElementById('legal_requirements_impact') ? document.getElementById('legal_requirements_impact').value : '',
+            financial_losses_impact: document.getElementById('financial_losses_impact') ? document.getElementById('financial_losses_impact').value : '',
+            reputation_impact: document.getElementById('reputation_impact') ? document.getElementById('reputation_impact').value : '',
+            asset_cost: document.getElementById('asset_cost').value ? parseFloat(document.getElementById('asset_cost').value) : null,
+            asset_cost_rating: document.getElementById('asset_cost_rating').value,
+            security_property_impacts: securityPropertyImpacts
+        };
+        
+        fetch(requestUrl, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error('Ошибка при сохранении');
+            }
+        })
+        .then(data => {
+            alert('Актив успешно сохранен');
+            window.location.href = "/assets";
+        })
+        .catch(error => {
+            alert('Ошибка при сохранении актива');
+            console.error('Error:', error);
+        });
+    });
+</script>
+{% endblock %}

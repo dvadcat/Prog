@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Идентификация инцидентов - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Идентификация сценариев инцидентов и оценка уровня последствий</h2>
+        <p class="text-muted">Формирование базы данных инцидентов ИБ</p>
+        
+        <div class="mb-3">
+            <a href="{{ url_for('incident_bp.create_incident_page') }}" class="btn btn-primary me-2">Создать инцидент</a>
+            <a href="/incidents/summary-tables" class="btn btn-success">Сводные таблицы</a>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Актив</th>
+                        <th>Угроза</th>
+                        <th>Уязвимость</th>
+                        <th>Уровень воздействия</th>
+                        <th>Дата создания</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="incidents-table-body">
+                    <!-- Данные будут загружаться через JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Загрузка списка инцидентов
+    fetchData('/api/incidents')
+        .then(data => {
+            if (data) {
+                const tbody = document.getElementById('incidents-table-body');
+                tbody.innerHTML = '';
+                
+                data.forEach(incident => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${incident.id}</td>
+                        <td>${incident.asset ? incident.asset.name : ''}</td>
+                        <td>${incident.threat ? incident.threat.name : ''}</td>
+                        <td>${incident.vulnerability ? incident.vulnerability.name : ''}</td>
+                        <td>${incident.impact_level || 'Не оценено'}</td>
+                        <td>${new Date(incident.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <a href="/incidents/${incident.id}/edit" class="btn btn-sm btn-outline-primary">Изменить</a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteIncident(${incident.id})">Удалить</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        });
+});
+
+function deleteIncident(id) {
+    confirmDelete('Вы уверены, что хотите удалить этот инцидент?', () => {
+        fetch(`/api/incidents/${id}`, { method: 'DELETE' })
+            .then(response => {
+                if (response.ok) {
+                    showNotification('Инцидент успешно удален', 'success');
+                    location.reload();
+                } else {
+                    showNotification('Ошибка при удалении инцидента', 'danger');
+                }
+            });
+    });
+}
+
+function url_for(endpoint, params) {
+    // Временная функция для генерации URL
+    if (endpoint === 'incident_bp.edit_incident_page') {
+        return `/incidents/${params.incident_id}/edit`;
+    }
+    return '#';
+}
+</script>
+{% endblock %}

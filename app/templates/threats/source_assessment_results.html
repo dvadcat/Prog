@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка признака "Источника угрозы ИБ" - Результаты - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка признака "Источника угрозы ИБ"</h2>
+        
+        <form method="POST" id="assessment-results-form">
+            <div class="mb-3">
+                <label for="selected_threat" class="form-label">Выберите угрозу</label>
+                <select class="form-control" id="selected_threat" name="selected_threat" required>
+                    <option value="">Выберите угрозу...</option>
+                    {% for threat in threats %}
+                    <option value="{{ threat.id }}" data-name="{{ threat.name }}">
+                        {{ threat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mt-4" id="results-table" style="display: none;">
+    <div class="col-12">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Угроза</th>
+                    <th>Оценка признака "Источник угрозы ИБ"</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr id="result-row" style="display: none;">
+                    <td id="threat-name">-</td>
+                    <td>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="assessment-value" name="assessment_value" step="0.0001" min="0" max="1" placeholder="Введите оценку">
+                            <button class="btn btn-outline-secondary" type="button" onclick="calculateAssessment()">Рассчитать</button>
+                        </div>
+                        <div id="calculation-details" class="mt-2" style="display: none;">
+                            <p><strong>Формула:</strong> I = (A1 + A2 + A3 + A4) / (Amax * k)</p>
+                            <p id="formula-details">Где: A1, A2, A3, A4 - значения признаков; Amax = 4; k = 4</p>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="mt-3">
+            <h4>Примеры расчетов:</h4>
+            <ul>
+                <li><strong>У1:</strong> I = (4+3+1+4)/16 = 0,75</li>
+                <li><strong>У2:</strong> I = (4+3+1+1)/16 = 0,5625</li>
+                <li><strong>У3:</strong> I = (4+2+1+4)/16 = 0,6875</li>
+                <li><strong>У4:</strong> I = (4+2+1+1)/16 = 0,5</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('selected_threat').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    if (selectedOption.value) {
+        // Показываем строку с результатом
+        document.getElementById('result-row').style.display = 'table-row';
+        
+        // Заполняем название угрозы
+        document.getElementById('threat-name').textContent = selectedOption.dataset.name;
+        
+        // Сбрасываем значение оценки
+        document.getElementById('assessment-value').value = '';
+        document.getElementById('calculation-details').style.display = 'none';
+    } else {
+        // Скрываем строку с результатом
+        document.getElementById('result-row').style.display = 'none';
+    }
+});
+
+function calculateAssessment() {
+    const threatSelect = document.getElementById('selected_threat');
+    if (!threatSelect.value) {
+        alert('Пожалуйста, выберите угрозу');
+        return;
+    }
+    
+    // Здесь можно реализовать логику расчета на основе данных из таблицы 7
+    // Пока что просто показываем пример расчета
+    document.getElementById('calculation-details').style.display = 'block';
+    
+    // В реальной системе здесь будет логика получения данных из таблицы 7
+    // и расчета оценки, но для демонстрации просто покажем формулу
+}
+</script>
+{% endblock %}

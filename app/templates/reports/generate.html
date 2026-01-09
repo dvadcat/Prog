@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Отчёт в формате PDF - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Отчёт в формате PDF</h2>
+        <p class="text-muted">Формирование отчётов по результатам оценки рисков</p>
+        
+        <div class="mb-3">
+            <a href="{{ url_for('treatments_list') }}" class="btn btn-secondary">Вернуться к обработке рисков</a>
+        </div>
+
+        <!-- Выбор области -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Выбор области управления рисками</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="context-select" class="form-label">Область</label>
+                    <select class="form-control" id="context-select" onchange="loadDataForContext()">
+                        <option value="">Выберите область...</option>
+                        {% for context in contexts %}
+                        <option value="{{ context.id }}">{{ context.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Модули для отчетов -->
+        <div id="report-modules" style="display: none;">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Модули для включения в отчет</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="select-all-modules" onchange="toggleAllModules()">
+                                <label class="form-check-label fw-bold" for="select-all-modules">
+                                    Выбрать все модули
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input module-checkbox" type="checkbox" id="module-assets" value="assets">
+                                <label class="form-check-label" for="module-assets">
+                                    <i class="bi bi-database"></i> <strong>Активы</strong>
+                                    <small class="text-muted d-block">Информация об активах системы</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input module-checkbox" type="checkbox" id="module-threats" value="threats">
+                                <label class="form-check-label" for="module-threats">
+                                    <i class="bi bi-shield-exclamation"></i> <strong>Угрозы</strong>
+                                    <small class="text-muted d-block">Угрозы информационной безопасности</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input module-checkbox" type="checkbox" id="module-vulnerabilities" value="vulnerabilities">
+                                <label class="form-check-label" for="module-vulnerabilities">
+                                    <i class="bi bi-bug"></i> <strong>Уязвимости</strong>
+                                    <small class="text-muted d-block">Уязвимости системы</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input module-checkbox" type="checkbox" id="module-incidents" value="incidents">
+                                <label class="form-check-label" for="module-incidents">
+                                    <i class="bi bi-exclamation-triangle"></i> <strong>Инциденты</strong>
+                                    <small class="text-muted d-block">Инциденты информационной безопасности</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input module-checkbox" type="checkbox" id="module-risks" value="risks">
+                                <label class="form-check-label" for="module-risks">
+                                    <i class="bi bi-graph-up"></i> <strong>Риски</strong>
+                                    <small class="text-muted d-block">Оценка и анализ рисков</small>
+                                </label>
+                            </div>
+                            
+                            <!-- Статистика данных -->
+                            <div class="mt-4">
+                                <h6>Доступные данные:</h6>
+                                <div id="data-stats" class="small text-muted">
+                                    <!-- Статистика будет загружаться через JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопки генерации отчетов -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Генерация отчетов</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button class="btn btn-success btn-lg w-100 mb-3" onclick="generateCombinedReport()">
+                                <i class="bi bi-file-earmark-pdf"></i> Общий отчет (все выбранные модули)
+                            </button>
+                        </div>
+                        
+                    </div>
+                    
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allData = {
+    assets: [],
+    threats: [],
+    vulnerabilities: [],
+    incidents: [],
+    risks: []
+};
+
+function loadDataForContext() {
+    const contextId = document.getElementById('context-select').value;
+    if (!contextId) {
+        document.getElementById('report-modules').style.display = 'none';
+        return;
+    }
+
+    // Загружаем данные для выбранной области
+    Promise.all([
+        fetch(`/api/assets?context_id=${contextId}`).then(response => response.json()),
+        fetch('/api/threats').then(response => response.json()),
+        fetch('/api/vulnerabilities').then(response => response.json()),
+        fetch(`/api/incidents?context_id=${contextId}`).then(response => response.json()),
+        fetch(`/api/risks?context_id=${contextId}`).then(response => response.json())
+    ])
+    .then(([assets, threats, vulnerabilities, incidents, risks]) => {
+        allData = { assets, threats, vulnerabilities, incidents, risks };
+        
+        updateDataStats();
+        document.getElementById('report-modules').style.display = 'block';
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки данных:', error);
+        showNotification('Ошибка загрузки данных', 'danger');
+    });
+}
+
+function updateDataStats() {
+    const statsDiv = document.getElementById('data-stats');
+    statsDiv.innerHTML = `
+        <div class="row">
+            <div class="col-6">Активы:</div>
+            <div class="col-6 text-end">${allData.assets.length}</div>
+            <div class="col-6">Угрозы:</div>
+            <div class="col-6 text-end">${allData.threats.length}</div>
+            <div class="col-6">Уязвимости:</div>
+            <div class="col-6 text-end">${allData.vulnerabilities.length}</div>
+            <div class="col-6">Инциденты:</div>
+            <div class="col-6 text-end">${allData.incidents.length}</div>
+            <div class="col-6">Риски:</div>
+            <div class="col-6 text-end">${allData.risks.length}</div>
+        </div>
+    `;
+}
+
+function toggleAllModules() {
+    const selectAll = document.getElementById('select-all-modules');
+    const moduleCheckboxes = document.querySelectorAll('.module-checkbox');
+    
+    moduleCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function getSelectedModules() {
+    const selectedModules = [];
+    const moduleCheckboxes = document.querySelectorAll('.module-checkbox:checked');
+    
+    moduleCheckboxes.forEach(checkbox => {
+        selectedModules.push(checkbox.value);
+    });
+    
+    return selectedModules;
+}
+
+function generateCombinedReport() {
+    const contextId = document.getElementById('context-select').value;
+    if (!contextId) {
+        showNotification('Выберите область', 'warning');
+        return;
+    }
+
+    const selectedModules = getSelectedModules();
+    if (selectedModules.length === 0) {
+        showNotification('Выберите хотя бы один модуль для отчета', 'warning');
+        return;
+    }
+
+    // Генерируем общий отчет для любых выбранных модулей
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/reports/combined/pdf';
+    form.style.display = 'none';
+
+    // Добавляем контекст
+    const contextInput = document.createElement('input');
+    contextInput.type = 'hidden';
+    contextInput.name = 'context_id';
+    contextInput.value = contextId;
+    form.appendChild(contextInput);
+
+    // Добавляем выбранные модули
+    selectedModules.forEach(module => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'modules[]';
+        input.value = module;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+}
+
+function generateIndividualReports() {
+    const contextId = document.getElementById('context-select').value;
+    if (!contextId) {
+        showNotification('Выберите область', 'warning');
+        return;
+    }
+
+    const selectedModules = getSelectedModules();
+    if (selectedModules.length === 0) {
+        showNotification('Выберите хотя бы один модуль для отчета', 'warning');
+        return;
+    }
+
+    // Генерируем отдельные отчеты для каждого модуля
+    selectedModules.forEach((module, index) => {
+        setTimeout(() => {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/api/reports/${module}/pdf`;
+            form.style.display = 'none';
+
+            // Добавляем контекст
+            const contextInput = document.createElement('input');
+            contextInput.type = 'hidden';
+            contextInput.name = 'context_id';
+            contextInput.value = contextId;
+            form.appendChild(contextInput);
+
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        }, index * 1000); // Задержка между запросами
+    });
+
+    showNotification(`Генерируются ${selectedModules.length} отчетов...`, 'info');
+}
+
+function showNotification(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.col-12');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

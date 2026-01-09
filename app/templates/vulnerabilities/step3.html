@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка уязвимостей{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка уязвимостей активов</h2>
+
+        <div id="tables-container">
+            <!-- Таблицы будут загружаться через JavaScript -->
+        </div>
+
+        <button class="btn btn-success" onclick="finishAssessment()">Завершить</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadAssessmentTables();
+});
+
+function loadAssessmentTables() {
+    const scale = JSON.parse(localStorage.getItem('vulnerability_scale') || '[]');
+    const tableData = JSON.parse(localStorage.getItem('vulnerability_table') || '[]');
+
+    if (scale.length === 0 || tableData.length === 0) {
+        document.getElementById('tables-container').innerHTML = '<div class="alert alert-warning">Данные не найдены. Вернитесь к предыдущему разделу.</div>';
+        return;
+    }
+
+    const assetIds = tableData.map(item => item.asset_id);
+    const vulIds = [...new Set(tableData.flatMap(item => item.vulnerabilities))];
+
+    Promise.all([
+        ...assetIds.map(id => fetch(`/api/assets/${id}`).then(r => r.json())),
+        ...vulIds.map(id => fetch(`/api/vulnerabilities/${id}`).then(r => r.json())),
+        // Загружаем существующие оценки из AssetVulnerability
+        fetch('/api/vulnerabilities/asset-vulnerabilities').then(r => r.json()),
+        // ДОПОЛНИТЕЛЬНО загружаем оценки из VulnerabilityAssessment
+        fetch('/api/vulnerabilities/vulnerability-assessments').then(r => r.json())
+    ]).then(results => {
+        const assets = results.slice(0, assetIds.length);
+        const vulnerabilities = results.slice(assetIds.length, assetIds.length + vulIds.length);
+        const existingAssessmentsAv = results[results.length - 2];
+        const existingAssessmentsVA = results[results.length - 1];
+
+        const assetMap = {};
+        assets.forEach(asset => assetMap[asset.id] = asset);
+
+        const vulMap = {};
+        vulnerabilities.forEach(vul => vulMap[vul.id] = vul);
+
+        // Группировка по типу
+        const grouped = {};
+        tableData.forEach(item => {
+            const asset = assetMap[item.asset_id];
+            if (!asset) return;
+            const type = asset.type;
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push({ ...asset, selectedVulnerabilities: item.vulnerabilities });
+        });
+
+        buildAssessmentTables(grouped, scale, vulMap, existingAssessmentsAv, existingAssessmentsVA);
+    }).catch(error => {
+        console.error('Ошибка загрузки:', error);
+        alert('Ошибка загрузки данных');
+    });
+}
+
+function buildAssessmentTables(grouped, scale, vulMap, existingAssessmentsAv, existingAssessmentsVA) {
+    const container = document.getElementById('tables-container');
+    container.innerHTML = '';
+
+    // Словарь для перевода типов активов
+    const typeTranslations = {
+        'information': 'информационных активов',
+        'software': 'программных средств',
+        'hardware': 'аппаратных средств',
+        'personnel': 'персонала',
+        'facility': 'объектов недвижимости',
+        'network': 'сетевых активов',
+        'data': 'данных',
+        'service': 'услуг'
+    };
+
+    for (const [type, assetList] of Object.entries(grouped)) {
+        const tableDiv = document.createElement('div');
+        tableDiv.className = 'mb-5';
+        const translatedType = typeTranslations[type] || type;
+        tableDiv.innerHTML = `<h4>Оценка уязвимостей ${translatedType}</h4>`;
+
+        const table = document.createElement('table');
+        table.className = 'table table-bordered';
+
+        // Собираем уникальные уязвимости
+        const allVuls = [...new Set(assetList.flatMap(a => a.selectedVulnerabilities))];
+
+        // Header
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = '<th>Актив</th>' + allVuls.map(vulId => {
+            const vul = vulMap[vulId];
+            return vul ? `<th>${vul.name}</th>` : '<th>Неизвестно</th>';
+        }).join('');
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        assetList.forEach(asset => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td><strong>${asset.name}</strong></td>`;
+            allVuls.forEach(vulId => {
+                const hasVul = asset.selectedVulnerabilities.includes(vulId);
+                if (hasVul) {
+                    const select = document.createElement('select');
+                    select.className = 'form-select';
+                    select.setAttribute('data-asset', asset.id);
+                    select.setAttribute('data-vul', vulId);
+                    select.innerHTML = `<option value="">-</option><option value="Н">Н</option><option value="С">С</option><option value="В">В</option>`;
+                    
+                    // Пытаемся загрузить существующую оценку из VulnerabilityAssessment (приоритет)
+                    let foundValue = null;
+                    
+                    // Сначала проверяем в VulnerabilityAssessment
+                    const existingVA = existingAssessmentsVA.find(a =>
+                        a.asset_id === asset.id && String(a.vulnerability_id) === String(vulId)
+                    );
+                    if (existingVA && existingVA.assessment_level) {
+                        foundValue = existingVA.assessment_level;
+                    }
+                    
+                    // Если не нашли, проверяем в AssetVulnerability
+                    if (!foundValue) {
+                        const existingAv = existingAssessmentsAv.find(a =>
+                            a.asset_id === asset.id && String(a.vulnerability_id) === String(vulId)
+                        );
+                        if (existingAv && existingAv.assessment) {
+                            foundValue = existingAv.assessment;
+                        }
+                    }
+                    
+                    // Если не нашли, проверяем localStorage
+                    if (!foundValue) {
+                        const localValue = localStorage.getItem(`assessment_${asset.id}_${vulId}`);
+                        if (localValue) {
+                            foundValue = localValue;
+                        }
+                    }
+                    
+                    if (foundValue) {
+                        select.value = foundValue;
+                    }
+                    
+                    select.onchange = () => saveAssessment(asset.id, vulId, select.value);
+                    const cell = document.createElement('td');
+                    cell.appendChild(select);
+                    row.appendChild(cell);
+                } else {
+                    row.innerHTML += '<td>-</td>';
+                }
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+
+        tableDiv.appendChild(table);
+        container.appendChild(tableDiv);
+    }
+}
+
+function saveAssessment(assetId, vulId, value) {
+    const key = `assessment_${assetId}_${vulId}`;
+    localStorage.setItem(key, value);
+}
+
+function finishAssessment() {
+    // Собираем все оценки
+    const assessments = [];
+    document.querySelectorAll('select[data-asset]').forEach(select => {
+        const assetId = parseInt(select.getAttribute('data-asset'));
+        const vulId = select.getAttribute('data-vul');
+        const value = select.value;
+        
+        // Проверяем, что assetId и vulId валидные
+        if (value && assetId && vulId) {
+            assessments.push({
+                asset_id: assetId,
+                vulnerability_id: vulId,  // Сохраняем как строку, чтобы избежать проблем с NaN
+                level: value
+            });
+        }
+    });
+    
+    // Если нет оценок, просто показываем сообщение
+    if (assessments.length === 0) {
+        showNotification('Нет оценок для сохранения', 'warning');
+        return;
+    }
+    
+    // Сохраняем в базу данных
+    fetch('/api/vulnerabilities/save-vulnerability-assessments', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ assessments: assessments })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            showNotification('Оценка успешно сохранена', 'success');
+            // Очищаем localStorage
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('assessment_')) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } else {
+            showNotification('Ошибка сохранения: ' + (data.error || 'Неизвестная ошибка'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        showNotification('Ошибка сохранения данных', 'danger');
+    });
+}
+</script>
+{% endblock %}

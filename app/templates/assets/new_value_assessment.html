@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка ценности активов{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>Оценка ценности активов</h2>
+            
+            <!-- Выбор актива -->
+            <div class="card mb-3" id="step1">
+                <div class="card-header">
+                    <h5>Выбор актива</h5>
+                </div>
+                <div class="card-body">
+                    <form id="asset-selection-form">
+                        <div class="mb-3">
+                            <label for="asset" class="form-label">Выберите актив:</label>
+                            <select class="form-control" id="asset" name="asset_id" required>
+                                <option value="">-- Выберите актив --</option>
+                                {% for asset in assets %}
+                                <option value="{{ asset.id }}" data-type="{{ asset.type }}">
+                                    {{ asset.name }} ({{ asset.type }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="showStep2()">Далее</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Выбор зависимостей -->
+            <div class="card mb-3" id="step2" style="display: none;">
+                <div class="card-header">
+                    <h5>Выбор зависимостей</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Зависимость активов:</strong></p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="dependencies-table">
+                            <thead>
+                                <tr>
+                                    <th>Актив</th>
+                                    {% for asset in assets %}
+                                    <th>{{ asset.name }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for asset in assets %}
+                                <tr>
+                                    <td>{{ asset.name }}</td>
+                                    {% for other_asset in assets %}
+                                    <td>
+                                        <input type="checkbox" 
+                                               class="dependency-checkbox" 
+                                               data-asset-id="{{ asset.id }}" 
+                                               data-depends-on-id="{{ other_asset.id }}"
+                                               {% if asset.id == other_asset.id %}disabled{% endif %}>
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="autoCalculateAndSave()">Далее</button>
+                    <button type="button" class="btn btn-secondary" onclick="showStep1()">Назад</button>
+                </div>
+            </div>
+
+            <!-- Определение ценности -->
+            <div class="card mb-3" id="step3" style="display: none;">
+                <div class="card-header">
+                    <h5>Определение ценности</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Определение ценности актива:</strong></p>
+                    <div class="mb-3">
+                        <label for="value-without-dependencies" class="form-label">Ценность без учета зависимостей:</label>
+                        <select class="form-control" id="value-without-dependencies">
+                            <option value="">-- Выберите --</option>
+                            <option value="Н">Низкая</option>
+                            <option value="С">Средняя</option>
+                            <option value="В">Высокая</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="cost-rating" class="form-label">Оценка стоимости актива:</label>
+                        <select class="form-control" id="cost-rating">
+                            <option value="">-- Выберите --</option>
+                            <option value="низкая">Низкая</option>
+                            <option value="средняя">Средняя</option>
+                            <option value="высокая">Высокая</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="dependency-value" class="form-label">Ценность с учетом зависимостей:</label>
+                        <select class="form-control" id="dependency-value">
+                            <option value="">-- Выберите --</option>
+                            <option value="низкая">Низкая</option>
+                            <option value="средняя">Средняя</option>
+                            <option value="высокая">Высокая</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="calculated-value" class="form-label">Рассчитанная ценность:</label>
+                        <input type="text" class="form-control" id="calculated-value" readonly placeholder="Ценность будет рассчитана автоматически">
+                    </div>
+                    
+                    <button type="button" class="btn btn-primary" onclick="calculateAndShowStep4()">Рассчитать и далее</button>
+                    <button type="button" class="btn btn-secondary" onclick="showStep2()">Назад</button>
+                </div>
+            </div>
+
+            <!-- Итоговая ценность -->
+            <div class="card mb-3" id="step4" style="display: none;">
+                <div class="card-header">
+                    <h5>Итоговая ценность</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Итоговая ценность актива:</strong></p>
+                    <div class="mb-3">
+                        <label for="final-value" class="form-label">Итоговая ценность:</label>
+                        <select class="form-control" id="final-value">
+                            <option value="">-- Выберите --</option>
+                            <option value="Н">Низкая</option>
+                            <option value="С">Средняя</option>
+                            <option value="В">Высокая</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="final-value-display" class="form-label">Итоговая ценность (отображение):</label>
+                        <input type="text" class="form-control" id="final-value-display" readonly placeholder="Итоговая ценность">
+                    </div>
+                    
+                    <button type="button" class="btn btn-success" onclick="saveValueAssessment()">Сохранить оценку</button>
+                    <button type="button" class="btn btn-secondary" onclick="showStep2()">Назад</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStep = 1;
+
+function showStep1() {
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('step4').style.display = 'none';
+    currentStep = 1;
+}
+
+function showStep2() {
+    const assetId = document.getElementById('asset').value;
+    if (!assetId) {
+        alert('Пожалуйста, выберите актив');
+        return;
+    }
+    
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    loadExistingDependencies();
+    currentStep = 2;
+}
+
+function showStep3() {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
+    currentStep = 3;
+}
+
+function showStep4() {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('step4').style.display = 'block';
+    updateFinalValueDisplay();
+    currentStep = 4;
+}
+
+function calculateAndShowStep4() {
+    // Если значения не заполнены (при пропуске шага 3), устанавливаем значения по умолчанию
+    let valueWithoutDeps = document.getElementById('value-without-dependencies').value;
+    let costRating = document.getElementById('cost-rating').value;
+    let dependencyValue = document.getElementById('dependency-value').value;
+    
+    // Устанавливаем значения по умолчанию, если они не заданы
+    if (!valueWithoutDeps) {
+        valueWithoutDeps = 'С'; // Средняя
+        document.getElementById('value-without-dependencies').value = valueWithoutDeps;
+    }
+    if (!costRating) {
+        costRating = 'средняя'; // Средняя
+        document.getElementById('cost-rating').value = costRating;
+    }
+    if (!dependencyValue) {
+        dependencyValue = 'средняя'; // Средняя
+        document.getElementById('dependency-value').value = dependencyValue;
+    }
+    
+    // Определяем "Ценность без зависимостей" как максимальное значение
+    // из "ценности без учета зависимостей" и "оценки стоимости актива"
+    let finalValueWithoutDependencies = valueWithoutDeps;
+    
+    // Преобразуем значения для сравнения
+    const impactPriority = { 'Н': 1, 'С': 2, 'В': 3 };
+    const costPriority = { 'низкая': 1, 'средняя': 2, 'высокая': 3 };
+    
+    if (impactPriority[valueWithoutDeps] >= costPriority[costRating]) {
+        finalValueWithoutDependencies = valueWithoutDeps;
+    } else {
+        // Преобразуем costRating к формату Н/С/В
+        if (costRating === 'низкая') finalValueWithoutDependencies = 'Н';
+        else if (costRating === 'средняя') finalValueWithoutDependencies = 'С';
+        else if (costRating === 'высокая') finalValueWithoutDependencies = 'В';
+    }
+    
+    // Рассчитываем итоговую ценность по таблице 11
+    let calculatedValue = 'Н';
+    if (finalValueWithoutDependencies === 'В' || costRating === 'высокая') {
+        calculatedValue = 'В';
+    } else if (finalValueWithoutDependencies === 'С' || costRating === 'средняя') {
+        calculatedValue = 'С';
+    }
+    
+    // Учитываем зависимости
+    if (dependencyValue === 'высокая' && calculatedValue !== 'В') {
+        calculatedValue = 'В';
+    }
+    
+    document.getElementById('calculated-value').value = calculatedValue;
+    document.getElementById('final-value').value = calculatedValue;
+    
+    // Обновляем значение "ценности без учета зависимостей" на основе вычисленного
+    document.getElementById('value-without-dependencies').value = finalValueWithoutDependencies;
+    
+    // Показываем шаг 4 без вызова calculateAndShowStep4 снова
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('step4').style.display = 'block';
+    updateFinalValueDisplay();
+    currentStep = 4;
+}
+
+function updateFinalValueDisplay() {
+    const finalValue = document.getElementById('final-value').value;
+    let displayText = '';
+    
+    switch(finalValue) {
+        case 'Н':
+            displayText = 'Низкая';
+            break;
+        case 'С':
+            displayText = 'Средняя';
+            break;
+        case 'В':
+            displayText = 'Высокая';
+            break;
+        default:
+            displayText = 'Не определена';
+    }
+    
+    document.getElementById('final-value-display').value = displayText;
+}
+
+function saveValueAssessment() {
+    const assetId = document.getElementById('asset').value;
+    const originalValueWithoutDeps = document.getElementById('value-without-dependencies').value;
+    const costRating = document.getElementById('cost-rating').value;
+    const dependencyValue = document.getElementById('dependency-value').value;
+    const calculatedValue = document.getElementById('calculated-value').value;
+    const finalValue = document.getElementById('final-value').value;
+    
+    if (!assetId || !originalValueWithoutDeps || !costRating || !finalValue) {
+        alert('Пожалуйста, заполните все обязательные поля');
+        return;
+    }
+    
+    // Получаем все активы для анализа их ценности без зависимостей
+    fetch('/api/assets/')
+        .then(response => response.json())
+        .then(allAssets => {
+            // Получаем зависимости
+            return fetch('/api/asset-dependencies/')
+                .then(response => response.json())
+                .then(dependencies => {
+                    // Проверяем зависимости выбранного актива
+                    const assetDependencies = dependencies.filter(dep => dep.asset_id == assetId);
+                    
+                    // Ценность без зависимостей остается неизменной (это независимая характеристика)
+                    let finalValueWithoutDependencies = originalValueWithoutDeps;
+                    
+                    // Если у актива есть зависимости, проверяем максимальную ценность связанных активов
+                    let finalDependencyValue = dependencyValue;
+                    if (assetDependencies.length > 0) {
+                        // Собираем все связанные активы (сам актив + активы, от которых он зависит)
+                        const relatedAssetIds = [parseInt(assetId)];
+                        assetDependencies.forEach(dep => {
+                            relatedAssetIds.push(dep.depends_on_asset_id);
+                        });
+                        
+                        // Находим максимальную ценность без зависимостей среди всех связанных активов
+                        let maxPriority = 2; // Средняя = 2 по умолчанию
+                        const priorityMap = { 'Н': 1, 'С': 2, 'В': 3 };
+                        let maxValueWithoutDependencies = originalValueWithoutDeps;
+                        
+                        allAssets.forEach(asset => {
+                            if (relatedAssetIds.includes(asset.id) && asset.value_without_dependencies) {
+                                const assetPriority = priorityMap[asset.value_without_dependencies] || 2;
+                                if (assetPriority > maxPriority) {
+                                    maxPriority = assetPriority;
+                                    maxValueWithoutDependencies = asset.value_without_dependencies;
+                                }
+                            }
+                        });
+                        
+                        // Если максимальная ценность связанных активов выше, обновляем dependency_value
+                        if (maxValueWithoutDependencies !== originalValueWithoutDeps) {
+                            if (maxValueWithoutDependencies === 'В') finalDependencyValue = 'высокая';
+                            else if (maxValueWithoutDependencies === 'С') finalDependencyValue = 'средняя';
+                            else if (maxValueWithoutDependencies === 'Н') finalDependencyValue = 'низкая';
+                        }
+                    } else {
+                        // Если зависимостей нет, очищаем dependency_value
+                        finalDependencyValue = null;
+                    }
+                    
+                    // Определяем итоговую ценность
+                    let calculatedFinalValue = finalValue;
+                    
+                    // Сохраняем зависимости
+                    saveDependencies();
+                    
+                    // Обновляем актив
+                    return fetch(`/api/asset-values/final-value/${assetId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            value_without_dependencies: finalValueWithoutDependencies,
+                            cost_rating: costRating,
+                            dependency_value: finalDependencyValue
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Сохраняем результаты в таблицу 14
+                            return fetch('/api/asset-value-results/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    asset_id: parseInt(assetId),
+                                    value_without_dependencies: finalValueWithoutDependencies,
+                                    value_with_dependencies: finalDependencyValue,
+                                    final_value: calculatedFinalValue
+                                })
+                            });
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data) {
+                            alert('Оценка ценности актива успешно сохранена!');
+                            window.location.href = '/assets/value-results';
+                        }
+                    });
+                });
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка при сохранении оценки');
+        });
+}
+
+function autoCalculateAndSave() {
+    // Получаем ID актива
+    const assetId = document.getElementById('asset').value;
+    if (!assetId) {
+        alert('Пожалуйста, выберите актив');
+        return;
+    }
+    
+    // Получаем все активы для анализа их ценности без зависимостей
+    fetch('/api/assets/')
+        .then(response => response.json())
+        .then(allAssets => {
+            // Получаем информацию о зависимостях актива
+            return fetch('/api/asset-dependencies/')
+                .then(response => response.json())
+                .then(dependencies => {
+                    // Проверяем, есть ли у актива зависимости
+                    const assetDependencies = dependencies.filter(dep => dep.asset_id == assetId);
+                    
+                    // Получаем текущую ценность без зависимостей актива (НЕ изменяем ее)
+                    const currentAsset = allAssets.find(a => a.id == assetId);
+                    let valueWithoutDependencies = currentAsset && currentAsset.value_without_dependencies
+                        ? currentAsset.value_without_dependencies
+                        : 'С'; // По умолчанию средняя, если не задана
+                    
+                    // Если у актива нет зависимостей, не устанавливаем dependency_value
+                    let finalValueWithDependencies = null;
+                    let finalCalculatedValue = valueWithoutDependencies; // По умолчанию равна ценности без зависимостей
+                    
+                    if (assetDependencies.length > 0) {
+                        // Собираем все связанные активы (сам актив + активы, от которых он зависит)
+                        const relatedAssetIds = [parseInt(assetId)];
+                        assetDependencies.forEach(dep => {
+                            relatedAssetIds.push(dep.depends_on_asset_id);
+                        });
+                        
+                        // Находим максимальную ценность без зависимостей среди всех связанных активов
+                        let maxPriority = 0;
+                        const priorityMap = { 'Н': 1, 'С': 2, 'В': 3 };
+                        let maxValueWithoutDependencies = null;
+                        
+                        allAssets.forEach(asset => {
+                            if (relatedAssetIds.includes(asset.id) && asset.value_without_dependencies) {
+                                const assetPriority = priorityMap[asset.value_without_dependencies] || 2;
+                                if (assetPriority > maxPriority) {
+                                    maxPriority = assetPriority;
+                                    maxValueWithoutDependencies = asset.value_without_dependencies;
+                                }
+                            }
+                        });
+                        
+                        // Преобразуем максимальную ценность в формат для dependency_value
+                        if (maxValueWithoutDependencies) {
+                            if (maxValueWithoutDependencies === 'Н') finalValueWithDependencies = 'низкая';
+                            else if (maxValueWithoutDependencies === 'С') finalValueWithDependencies = 'средняя';
+                            else if (maxValueWithoutDependencies === 'В') finalValueWithDependencies = 'высокая';
+                        } else {
+                            finalValueWithDependencies = null;
+                        }
+                        
+                        // Преобразуем обратно к формату Н/С/В для итоговой ценности
+                        if (finalValueWithDependencies === 'высокая') {
+                            finalCalculatedValue = 'В';
+                        } else if (finalValueWithDependencies === 'средняя') {
+                            finalCalculatedValue = 'С';
+                        } else if (finalValueWithDependencies === 'низкая') {
+                            finalCalculatedValue = 'Н';
+                        } else {
+                            finalCalculatedValue = valueWithoutDependencies;
+                        }
+                    }
+                    
+                    // Сохраняем зависимости
+                    saveDependencies();
+                    
+                    // Обновляем актив
+                    return fetch(`/api/asset-values/final-value/${assetId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            value_without_dependencies: valueWithoutDependencies,
+                            cost_rating: finalValueWithDependencies || 'средняя',
+                            dependency_value: finalValueWithDependencies  // Может быть null
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Сохраняем результаты в таблицу 14
+                            return fetch('/api/asset-value-results/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    asset_id: parseInt(assetId),
+                                    value_without_dependencies: valueWithoutDependencies,
+                                    value_with_dependencies: finalValueWithDependencies,
+                                    final_value: finalCalculatedValue
+                                })
+                            });
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data) {
+                            alert('Оценка ценности актива успешно сохранена!');
+                            window.location.href = '/assets/value-results';
+                        }
+                    });
+                });
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки зависимостей:', error);
+            
+            // Если не удалось загрузить зависимости, используем значения по умолчанию
+            const assetId = document.getElementById('asset').value;
+            if (!assetId) {
+                alert('Пожалуйста, выберите актив');
+                return;
+            }
+            
+            // Значения по умолчанию
+            let valueWithoutDependencies = 'С';
+            let valueWithDependencies = 'средняя';
+            
+            // Преобразуем значения для сравнения
+            const impactPriority = { 'Н': 1, 'С': 2, 'В': 3 };
+            const costPriority = { 'низкая': 1, 'средняя': 2, 'высокая': 3 };
+            
+            // Преобразуем "ценность без зависимостей" в формат для сравнения
+            let valueWithoutAsCost = valueWithoutDependencies;
+            if (valueWithoutDependencies === 'Н') valueWithoutAsCost = 'низкая';
+            else if (valueWithoutDependencies === 'С') valueWithoutAsCost = 'средняя';
+            else if (valueWithoutDependencies === 'В') valueWithoutAsCost = 'высокая';
+            
+            // Определяем "ценность с зависимостями" как максимальное из двух значений
+            let finalValueWithDependencies = valueWithDependencies;
+            if (costPriority[valueWithoutAsCost] > costPriority[valueWithDependencies]) {
+                finalValueWithDependencies = valueWithoutAsCost;
+            }
+            
+            // Преобразуем обратно к формату Н/С/В для итоговой ценности
+            let finalCalculatedValue = 'Н';
+            if (finalValueWithDependencies === 'высокая') {
+                finalCalculatedValue = 'В';
+            } else if (finalValueWithDependencies === 'средняя') {
+                finalCalculatedValue = 'С';
+            } else if (finalValueWithDependencies === 'низкая') {
+                finalCalculatedValue = 'Н';
+            }
+            
+            // Сохраняем зависимости
+            saveDependencies();
+            
+            // Обновляем актив
+            fetch(`/api/asset-values/final-value/${assetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    value_without_dependencies: valueWithoutDependencies,
+                    cost_rating: valueWithoutAsCost,
+                    dependency_value: finalValueWithDependencies
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Сохраняем результаты в таблицу 14
+                    return fetch('/api/asset-value-results/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            asset_id: parseInt(assetId),
+                            value_without_dependencies: valueWithoutDependencies,
+                            value_with_dependencies: finalValueWithDependencies,
+                            final_value: finalCalculatedValue
+                        })
+                    });
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data) {
+                    alert('Оценка ценности актива успешно сохранена!');
+                    window.location.href = '/assets/value-results';
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при сохранении оценки');
+            });
+        });
+}
+
+function saveDependencies() {
+    const checkboxes = document.querySelectorAll('.dependency-checkbox');
+    const dependencies = [];
+    
+    checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+            const assetId = checkbox.getAttribute('data-asset-id');
+            const dependsOnId = checkbox.getAttribute('data-depends-on-id');
+            
+            if (assetId && dependsOnId) {
+                dependencies.push({
+                    asset_id: parseInt(assetId),
+                    depends_on_asset_id: parseInt(dependsOnId)
+                });
+            }
+        }
+    });
+    
+    fetch('/api/asset-dependencies/bulk-update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dependencies: dependencies })
+    })
+    .catch(error => {
+        console.error('Ошибка сохранения зависимостей:', error);
+    });
+}
+
+function loadExistingDependencies() {
+    fetch('/api/asset-dependencies/')
+        .then(response => response.json())
+        .then(data => {
+            data.forEach(dep => {
+                const checkbox = document.querySelector(`.dependency-checkbox[data-asset-id="${dep.asset_id}"][data-depends-on-id="${dep.depends_on_asset_id}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки зависимостей:', error);
+        });
+}
+
+// Обновляем отображение итоговой ценности при изменении
+document.getElementById('final-value').addEventListener('change', updateFinalValueDisplay);
+
+// Добавляем обработчики для предотвращения преждевременного предупреждения
+document.getElementById('value-without-dependencies').addEventListener('change', function() {
+    // Не делаем ничего при изменении, только при нажатии кнопки
+});
+
+document.getElementById('cost-rating').addEventListener('change', function() {
+    // Не делаем ничего при изменении, только при нажатии кнопки
+});
+
+document.getElementById('dependency-value').addEventListener('change', function() {
+    // Не делаем ничего при изменении, только при нажатии кнопки
+});
+</script>
+{% endblock %}

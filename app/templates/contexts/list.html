@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Определение области управления рисками - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<h4>Область определения управления рисками и критериев риска</h4>
+
+<div class="mb-3">
+    <a href="{{ url_for('create_context') }}" class="btn btn-primary btn-sm">Создать область</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Наименование</th>
+                <th>Ответственный</th>
+                <th>Дата создания</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody id="contexts-table-body">
+        </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadContexts();
+});
+
+function loadContexts() {
+    fetch('/api/contexts')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('contexts-table-body');
+            tbody.innerHTML = '';
+            
+            data.forEach(context => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${context.id}</td>
+                    <td>${context.name || ''}</td>
+                    <td>${context.owner_name || ''}</td>
+                    <td>${context.created_at ? new Date(context.created_at).toLocaleDateString('ru-RU') : ''}</td>
+                    <td>
+                        <a href="/contexts/${context.id}/edit" class="btn btn-sm btn-outline-primary">Изменить</a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteContext(${context.id})">Удалить</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки данных:', error);
+        });
+}
+
+function deleteContext(id) {
+    if (confirm('Вы уверены, что хотите удалить эту область?')) {
+        fetch(`/api/contexts/${id}`, { method: 'DELETE' })
+            .then(response => {
+                if (response.ok) {
+                    showNotification('Область удалена', 'success');
+                    loadContexts();
+                } else {
+                    showNotification('Ошибка при удалении области', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                showNotification('Ошибка при удалении области', 'danger');
+            });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}Таблицы инцидентов - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Таблицы инцидентов информационной безопасности</h2>
+        
+        <div class="mb-3">
+            <a href="{{ url_for('incident_bp.incidents_list_page') }}" class="btn btn-secondary">Вернуться к списку</a>
+            <a href="{{ url_for('incident_bp.create_incident_page') }}" class="btn btn-primary">Создать новый инцидент</a>
+        </div>
+
+        <!-- Идентифицированные сценарии инцидентов -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>Идентифицированные сценарии инцидентов</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Обозначение сценария инцидента</th>
+                                <th>Угроза</th>
+                                <th>Уязвимость</th>
+                                <th>Актив</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scenarios-table-body">
+                            <!-- Данные будут загружены через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Последствия инцидентов ИБ -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>Последствия инцидентов ИБ</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Обозначение сценария инцидента</th>
+                                <th>Операционные последствия</th>
+                                <th>Последствия для бизнеса</th>
+                            </tr>
+                        </thead>
+                        <tbody id="consequences-table-body">
+                            <!-- Данные будут загружены через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уровень последствий инцидентов ИБ -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>Уровень последствий инцидентов ИБ</h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Угроза</th>
+                                <th>Уязвимости, используемые угрозой</th>
+                                <th>Активы</th>
+                                <th>Операционные последствия</th>
+                                <th>Последствия для бизнеса</th>
+                                <th>Оценка уровня последствий</th>
+                            </tr>
+                        </thead>
+                        <tbody id="impact-level-table-body">
+                            <!-- Данные будут загружены через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let incidents = [];
+let assets = [];
+let threats = [];
+let vulnerabilities = [];
+
+// Загрузка данных при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadData();
+});
+
+function loadData() {
+    // Загружаем все необходимые данные
+    Promise.all([
+        fetch('/api/incidents').then(response => response.json()),
+        fetch('/api/assets').then(response => response.json()),
+        fetch('/api/threats').then(response => response.json()),
+        fetch('/api/vulnerabilities').then(response => response.json())
+    ])
+    .then(([incidentsData, assetsData, threatsData, vulnerabilitiesData]) => {
+        incidents = incidentsData;
+        assets = assetsData;
+        threats = threatsData;
+        vulnerabilities = vulnerabilitiesData;
+        
+        renderScenariosTable();
+        renderConsequencesTable();
+        renderImpactLevelTable();
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки данных:', error);
+        showNotification('Ошибка загрузки данных', 'danger');
+    });
+}
+
+function renderScenariosTable() {
+    const tbody = document.getElementById('scenarios-table-body');
+    tbody.innerHTML = '';
+
+    // Генерируем уникальные имена сценариев
+    const uniqueScenarioNames = generateUniqueScenarioNames();
+
+    // Группируем инциденты по типам активов
+    const infoIncidents = incidents.filter(incident => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        return asset && asset.type === 'information';
+    });
+    
+    const softwareIncidents = incidents.filter(incident => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        return asset && asset.type === 'software';
+    });
+    
+    const hardwareIncidents = incidents.filter(incident => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        return asset && asset.type === 'hardware';
+    });
+
+    // Функция для создания блока инцидентов
+    function createIncidentBlock(incidentGroup, title, bgClass) {
+        if (incidentGroup.length === 0) return;
+        
+        // Заголовок группы
+        const groupHeader = document.createElement('tr');
+        groupHeader.innerHTML = `<td colspan="4" class="text-center fw-bold bg-${bgClass} text-white">${title}</td>`;
+        tbody.appendChild(groupHeader);
+
+        incidentGroup.forEach(incident => {
+            const asset = assets.find(a => a.id === incident.asset_id);
+            const threat = threats.find(t => t.id === incident.threat_id);
+            const vulnerability = vulnerabilities.find(v => v.id === incident.vulnerability_id);
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${escapeHtml(uniqueScenarioNames[incident.id])}</td>
+                <td>${escapeHtml(threat ? threat.name : 'Неизвестная угроза')}</td>
+                <td>${escapeHtml(vulnerability ? vulnerability.name : 'Неизвестная уязвимость')}</td>
+                <td>${escapeHtml(asset ? asset.name : 'Неизвестный актив')}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // Создаем блоки для каждого типа активов
+    createIncidentBlock(infoIncidents, 'Информационные активы', 'info');
+    createIncidentBlock(softwareIncidents, 'Программные средства', 'success');
+    createIncidentBlock(hardwareIncidents, 'Аппаратные средства', 'warning');
+    
+    // Если есть инциденты других типов
+    const otherIncidents = incidents.filter(incident => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        return asset && asset.type !== 'information' && asset.type !== 'software' && asset.type !== 'hardware';
+    });
+    
+    if (otherIncidents.length > 0) {
+        createIncidentBlock(otherIncidents, 'Прочие активы', 'secondary');
+    }
+
+    // Если нет данных для отображения
+    if (tbody.children.length === 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.innerHTML = '<td colspan="4" class="text-center text-muted">Нет данных для отображения</td>';
+        tbody.appendChild(noDataRow);
+    }
+}
+
+// Функция для генерации уникальных имен сценариев
+function generateUniqueScenarioNames() {
+    const uniqueNames = {};
+    const nameCounts = {};
+
+    incidents.forEach(incident => {
+        let baseName = incident.scenario_name;
+        
+        // Если имя не задано, используем базовое "СИ"
+        if (!baseName) {
+            baseName = 'СИ';
+        }
+        
+        // Подсчитываем количество использований каждого базового имени
+        if (!nameCounts[baseName]) {
+            nameCounts[baseName] = 0;
+        }
+        nameCounts[baseName]++;
+        
+        // Если это первый раз используется это имя, оставляем как есть
+        if (nameCounts[baseName] === 1) {
+            uniqueNames[incident.id] = baseName;
+        } else {
+            // Для повторных использований добавляем номер
+            uniqueNames[incident.id] = `${baseName}${nameCounts[baseName]}`;
+        }
+    });
+
+    return uniqueNames;
+}
+
+function renderConsequencesTable() {
+    const tbody = document.getElementById('consequences-table-body');
+    tbody.innerHTML = '';
+
+    // Генерируем уникальные имена сценариев
+    const uniqueScenarioNames = generateUniqueScenarioNames();
+
+    incidents.forEach(incident => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        const threat = threats.find(t => t.id === incident.threat_id);
+        
+        // Парсим операционные последствия
+        let operationalImpactText = 'Не указано';
+        try {
+            if (incident.operational_impact) {
+                const impacts = JSON.parse(incident.operational_impact);
+                const impactNames = {
+                    'confidentiality': 'Конфиденциальность',
+                    'integrity': 'Целостность',
+                    'availability': 'Доступность'
+                };
+                operationalImpactText = impacts.map(impact => impactNames[impact] || impact).join(', ');
+            }
+        } catch (e) {
+            operationalImpactText = incident.operational_impact || 'Не указано';
+        }
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${escapeHtml(uniqueScenarioNames[incident.id])}</td>
+            <td>${escapeHtml(operationalImpactText)}</td>
+            <td>${escapeHtml(incident.business_impact || 'Не указано')}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function renderImpactLevelTable() {
+    const tbody = document.getElementById('impact-level-table-body');
+    tbody.innerHTML = '';
+
+    // Группируем по угрозам
+    const threatGroups = {};
+    incidents.forEach(incident => {
+        if (!threatGroups[incident.threat_id]) {
+            threatGroups[incident.threat_id] = [];
+        }
+        threatGroups[incident.threat_id].push(incident);
+    });
+
+    Object.keys(threatGroups).forEach(threatId => {
+        const threatIncidents = threatGroups[threatId];
+        const threat = threats.find(t => t.id === parseInt(threatId));
+        
+        if (!threat) return;
+
+        // Собираем уязвимости для этой угрозы
+        const vulnerabilitiesForThreat = [...new Set(threatIncidents.map(incident => {
+            const vulnerability = vulnerabilities.find(v => v.id === incident.vulnerability_id);
+            return vulnerability ? vulnerability.name : 'Неизвестная уязвимость';
+        }))];
+
+        // Собираем активы для этой угрозы
+        const assetsForThreat = [...new Set(threatIncidents.map(incident => {
+            const asset = assets.find(a => a.id === incident.asset_id);
+            return asset ? asset.name : 'Неизвестный актив';
+        }))];
+
+        // Собираем операционные последствия
+        const operationalImpacts = [...new Set(threatIncidents.map(incident => {
+            try {
+                if (incident.operational_impact) {
+                    const impacts = JSON.parse(incident.operational_impact);
+                    const impactNames = {
+                        'confidentiality': 'Конфиденциальность',
+                        'integrity': 'Целостность',
+                        'availability': 'Доступность'
+                    };
+                    return impacts.map(impact => impactNames[impact] || impact).join(', ');
+                }
+            } catch (e) {
+                return incident.operational_impact || 'Не указано';
+            }
+            return 'Не указано';
+        }))];
+
+        // Собираем бизнес-последствия
+        const businessImpacts = [...new Set(threatIncidents.map(incident => 
+            incident.business_impact || 'Не указано'
+        ))];
+
+        // Определяем уровень последствий (можно улучшить логику)
+        const impactLevel = threatIncidents[0]?.impact_level || 'средний';
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${escapeHtml(threat.name)}</td>
+            <td>${vulnerabilitiesForThreat.map(v => escapeHtml(v)).join('<br>')}</td>
+            <td>${assetsForThreat.map(a => escapeHtml(a)).join('<br>')}</td>
+            <td>${operationalImpacts.map(o => escapeHtml(o)).join('<br>')}</td>
+            <td>${businessImpacts.map(b => escapeHtml(b)).join('<br>')}</td>
+            <td><span class="badge bg-${getImpactBadgeColor(impactLevel)}">${escapeHtml(impactLevel.charAt(0).toUpperCase() + impactLevel.slice(1))}</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getImpactBadgeColor(level) {
+    switch(level) {
+        case 'низкий': return 'success';
+        case 'средний': return 'warning';
+        case 'высокий': return 'danger';
+        case 'критический': return 'dark';
+        default: return 'secondary';
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, '"')
+        .replace(/'/g, "'");
+}
+
+function showNotification(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.col-12');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

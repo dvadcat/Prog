@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка вероятности реализации угрозы - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка вероятности реализации угрозы, качественное и количественное значения</h2>
+        
+        <form method="POST" id="final-calculation-form">
+            <div class="mb-3">
+                <label for="selected_threat" class="form-label">Выберите угрозу</label>
+                <select class="form-control" id="selected_threat" name="selected_threat" required>
+                    <option value="">Выберите угрозу...</option>
+                    {% for threat in threats %}
+                    <option value="{{ threat.id }}" data-name="{{ threat.name }}">
+                        {{ threat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mt-4" id="final-table" style="display: none;">
+    <div class="col-12">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Качественное значение</th>
+                    <th>Количественное значение</th>
+                    <th>Выбранное значение</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Минимальная</td>
+                    <td>[0.25; 0.4]</td>
+                    <td><input type="radio" name="probability_level" value="минимальная" class="form-check-input"></td>
+                </tr>
+                <tr>
+                    <td>Средняя</td>
+                    <td>[0.4; 0.7]</td>
+                    <td><input type="radio" name="probability_level" value="средняя" class="form-check-input"></td>
+                </tr>
+                <tr>
+                    <td>Высокая</td>
+                    <td>[0.7; 1]</td>
+                    <td><input type="radio" name="probability_level" value="высокая" class="form-check-input"></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="mt-3">
+            <div class="mb-3">
+                <label for="custom_probability" class="form-label">Или введите конкретное числовое значение (0.0 - 1.0)</label>
+                <input type="number" class="form-control" id="custom_probability" name="custom_probability" step="0.0001" min="0" max="1" placeholder="Введите вероятность">
+            </div>
+            
+            <button type="button" class="btn btn-primary" onclick="determineQualitativeValue()">Определить качественное значение</button>
+            
+            <div id="result" class="mt-3" style="display: none;">
+                <h5>Результат:</h5>
+                <p id="result-text"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('selected_threat').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    if (selectedOption.value) {
+        // Показываем таблицу
+        document.getElementById('final-table').style.display = 'block';
+        
+        // Сбрасываем все выбранные значения
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.checked = false;
+        });
+        
+        document.getElementById('custom_probability').value = '';
+        document.getElementById('result').style.display = 'none';
+    } else {
+        // Скрываем таблицу
+        document.getElementById('final-table').style.display = 'none';
+    }
+});
+
+function determineQualitativeValue() {
+    let probability = null;
+    
+    // Проверяем, выбрано ли качественное значение
+    const selectedRadio = document.querySelector('input[name="probability_level"]:checked');
+    if (selectedRadio) {
+        probability = getProbabilityRange(selectedRadio.value);
+    }
+    
+    // Проверяем, введено ли числовое значение
+    const customProbability = document.getElementById('custom_probability').value;
+    if (customProbability) {
+        probability = parseFloat(customProbability);
+    }
+    
+    if (probability === null || isNaN(probability)) {
+        alert('Пожалуйста, выберите качественное значение или введите числовое значение');
+        return;
+    }
+    
+    let qualitativeValue = '';
+    if (probability >= 0.25 && probability <= 0.4) {
+        qualitativeValue = 'Минимальная';
+    } else if (probability > 0.4 && probability <= 0.7) {
+        qualitativeValue = 'Средняя';
+    } else if (probability > 0.7 && probability <= 1.0) {
+        qualitativeValue = 'Высокая';
+    } else {
+        qualitativeValue = 'Значение вне диапазона [0.25; 1.0]';
+    }
+    
+    document.getElementById('result-text').innerHTML = `
+        <strong>Числовое значение:</strong> ${probability.toFixed(4)}<br>
+        <strong>Качественное значение:</strong> ${qualitativeValue}
+    `;
+    document.getElementById('result').style.display = 'block';
+}
+
+function getProbabilityRange(level) {
+    switch(level) {
+        case 'минимальная':
+            return 0.3; // Среднее значение диапазона [0.25; 0.4]
+        case 'средняя':
+            return 0.55; // Среднее значение диапазона [0.4; 0.7]
+        case 'высокая':
+            return 0.85; // Среднее значение диапазона [0.7; 1.0]
+        default:
+            return null;
+    }
+}
+</script>
+{% endblock %}

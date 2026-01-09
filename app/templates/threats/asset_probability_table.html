@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка вероятности реализации угрозы для каждого актива - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка вероятности реализации угрозы для каждого актива</h2>
+        
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Актив</th>
+                                <th>Угроза</th>
+                                <th>Оценка вероятности реализации</th>
+                            </tr>
+                        </thead>
+                        <tbody id="probability-table-body">
+                            <!-- Данные будут загружены динамически -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="goBack()">Назад</button>
+                    <button type="button" class="btn btn-primary" onclick="finishAnalysis()">Завершить анализ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedThreats = [];
+let selectedAssets = [];
+let threats = [];
+let savedAssessments = [];
+
+// Загружаем данные при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadData();
+});
+
+function loadData() {
+    // Загружаем выбранные угрозы и активы из localStorage
+    const savedThreats = localStorage.getItem('selectedThreats');
+    const savedAssets = localStorage.getItem('selectedAssets');
+    
+    if (savedThreats) {
+        selectedThreats = JSON.parse(savedThreats);
+    }
+    
+    if (savedAssets) {
+        selectedAssets = JSON.parse(savedAssets);
+    }
+
+    // Проверяем, что есть данные для отображения
+    if (selectedThreats.length === 0 || selectedAssets.length === 0) {
+        document.getElementById('probability-table-body').innerHTML =
+            '<tr><td colspan="3" class="text-center text-danger">Нет данных для отображения. Вернитесь к выбору угроз и активов.</td></tr>';
+        return;
+    }
+
+    // Загружаем сохраненные оценки из базы данных
+    fetch('/api/threats/asset-probability-assessments')
+        .then(response => response.json())
+        .then(data => {
+            savedAssessments = data;
+            // Загружаем все угрозы для получения оценок
+            return fetch('/api/threats/');
+        })
+        .then(response => response.json())
+        .then(data => {
+            threats = data;
+            renderProbabilityTable();
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки данных:', error);
+            document.getElementById('probability-table-body').innerHTML =
+                '<tr><td colspan="3" class="text-center text-danger">Ошибка загрузки данных</td></tr>';
+        });
+}
+
+function getAssessmentLevel(value) {
+    if (value >= 0.7 && value <= 1) return 'Высокая';
+    if (value >= 0.4 && value < 0.7) return 'Средняя';
+    if (value >= 0.25 && value < 0.4) return 'Минимальная';
+    return 'Минимальная';
+}
+
+function getThreatAssessment(threatId, assessmentType) {
+    const threat = threats.find(t => t.id == threatId);
+    if (!threat) return null;
+    
+    if (assessmentType === 'source' && threat.source_assessment) {
+        try {
+            const data = JSON.parse(threat.source_assessment);
+            return data.assessment;
+        } catch (e) {
+            return null;
+        }
+    }
+    
+    if (assessmentType === 'probability' && threat.probability_assessment) {
+        try {
+            const data = JSON.parse(threat.probability_assessment);
+            return data.assessment;
+        } catch (e) {
+            return null;
+        }
+    }
+    
+    return null;
+}
+
+function renderProbabilityTable() {
+    const tbody = document.getElementById('probability-table-body');
+    tbody.innerHTML = '';
+
+    // Загружаем сохраненные связи актив-угроза из localStorage
+    const assetThreatMappings = JSON.parse(localStorage.getItem('assetThreatMappings') || '[]');
+    console.log('assetThreatMappings from localStorage:', assetThreatMappings);
+
+    // Фильтруем только актуальные угрозы
+    const relevantThreats = threats.filter(threat => threat.is_relevant);
+
+    // Группируем выбранные активы по типам из базы данных
+    const infoAssets = selectedAssets.filter(asset => asset.type === 'information');
+    const softwareAssets = selectedAssets.filter(asset => asset.type === 'software');
+    const hardwareAssets = selectedAssets.filter(asset => asset.type === 'hardware');
+    
+    // Функция для создания блока активов с учетом связей
+    function createAssetBlock(assetGroup, title, bgClass) {
+        if (assetGroup.length === 0) return;
+        
+        // Заголовок группы
+        const groupHeader = document.createElement('tr');
+        groupHeader.innerHTML = `<td colspan="3" class="text-center fw-bold bg-${bgClass} text-white">${title}</td>`;
+        tbody.appendChild(groupHeader);
+
+        assetGroup.forEach(asset => {
+            // Получаем угрозы, связанные с данным активом, и фильтруем только актуальные
+            const assetThreats = assetThreatMappings
+                .filter(mapping => mapping.asset_id === asset.id)
+                .map(mapping => {
+                    console.log(`Mapping: asset ${asset.id} -> threat ${mapping.threat_id}`);
+                    return relevantThreats.find(t => t.id === mapping.threat_id);
+                })
+                .filter(threat => threat); // Убираем undefined и неактуальные угрозы
+
+            // Если нет связанных актуальных угроз, пропускаем актив
+            if (assetThreats.length === 0) {
+                return;
+            }
+
+            assetThreats.forEach((threat, index) => {
+                // Проверяем, есть ли сохраненная оценка для этой связки актив-угроза
+                const savedAssessment = savedAssessments.find(a =>
+                    a.asset_id === asset.id && a.threat_id === threat.id
+                );
+                
+                let finalAssessment = 0.5; // Значение по умолчанию
+                let level = 'Средняя';
+                
+                if (savedAssessment && savedAssessment.score) {
+                    finalAssessment = savedAssessment.score;
+                    level = savedAssessment.assessment || getAssessmentLevel(finalAssessment);
+                } else {
+                    // Если нет сохраненной оценки, пробуем получить из threat
+                    const sourceAssessment = getThreatAssessment(threat.id, 'source');
+                    const probabilityAssessment = getThreatAssessment(threat.id, 'probability');
+                    
+                    if (probabilityAssessment) {
+                        finalAssessment = probabilityAssessment;
+                    } else if (sourceAssessment) {
+                        finalAssessment = sourceAssessment;
+                    }
+                    
+                    level = getAssessmentLevel(finalAssessment);
+                }
+
+                const row = document.createElement('tr');
+                
+                // Объединяем ячейки актива для первой угрозы
+                if (index === 0) {
+                    const rowspan = assetThreats.length;
+                    row.innerHTML = `
+                        <td rowspan="${rowspan}" class="fw-bold align-middle">${escapeHtml(asset.name)}</td>
+                        <td>${escapeHtml(threat.name)}</td>
+                        <td><span class="badge bg-${getBadgeColor(finalAssessment)}">${level}</span></td>
+                    `;
+                } else {
+                    row.innerHTML = `
+                        <td>${escapeHtml(threat.name)}</td>
+                        <td><span class="badge bg-${getBadgeColor(finalAssessment)}">${level}</span></td>
+                    `;
+                }
+                
+                tbody.appendChild(row);
+            });
+        });
+    }
+
+    // Создаем блоки для каждого типа активов
+    createAssetBlock(infoAssets, 'Информационные активы', 'info');
+    createAssetBlock(softwareAssets, 'Программные средства', 'success');
+    createAssetBlock(hardwareAssets, 'Аппаратные средства', 'warning');
+    
+    // Если есть активы других типов
+    const otherAssets = selectedAssets.filter(asset =>
+        asset.type !== 'information' &&
+        asset.type !== 'software' &&
+        asset.type !== 'hardware'
+    );
+    
+    if (otherAssets.length > 0) {
+        createAssetBlock(otherAssets, 'Прочие активы', 'secondary');
+    }
+
+    // Если нет данных для отображения
+    if (tbody.children.length === 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.innerHTML = '<td colspan="3" class="text-center text-muted">Нет связанных актуальных угроз для выбранных активов. Проверьте настройки в разделе "Перечень актуальных угроз ИБ активов".</td>';
+        tbody.appendChild(noDataRow);
+    }
+}
+
+function getBadgeColor(value) {
+    if (value >= 0.7 && value <= 1) return 'danger';
+    if (value >= 0.4 && value < 0.7) return 'warning';
+    if (value >= 0.25 && value < 0.4) return 'success';
+    return 'success';
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, '"')
+        .replace(/'/g, "'");
+}
+
+function goBack() {
+    window.location.href = '/threats/select';
+}
+
+function finishAnalysis() {
+    // Подготавливаем данные для сохранения в базу данных
+    const assessments = [];
+    
+    // Загружаем сохраненные связи актив-угроза из localStorage
+    const assetThreatMappings = JSON.parse(localStorage.getItem('assetThreatMappings') || '[]');
+    
+    // Проходим по всем связям актив-угроза
+    assetThreatMappings.forEach(mapping => {
+        const threat = threats.find(t => t.id === mapping.threat_id);
+        
+        if (threat && threat.is_relevant) {
+            // Проверяем, есть ли уже сохраненная оценка
+            const existingAssessment = savedAssessments.find(a =>
+                a.asset_id === mapping.asset_id && a.threat_id === mapping.threat_id
+            );
+            
+            let assessmentScore = 0.5;
+            let level = 'Средняя';
+            
+            if (existingAssessment && existingAssessment.score) {
+                // Используем существующую оценку
+                assessmentScore = existingAssessment.score;
+                level = existingAssessment.assessment || getAssessmentLevel(assessmentScore);
+            } else {
+                // Получаем оценку вероятности из threat
+                if (threat.probability_assessment) {
+                    try {
+                        const probData = JSON.parse(threat.probability_assessment);
+                        assessmentScore = probData.assessment || 0.5;
+                    } catch (e) {
+                        console.error('Ошибка парсинга probability_assessment:', e);
+                    }
+                } else if (threat.source_assessment) {
+                    try {
+                        const sourceData = JSON.parse(threat.source_assessment);
+                        assessmentScore = sourceData.assessment || 0.5;
+                    } catch (e) {
+                        console.error('Ошибка парсинга source_assessment:', e);
+                    }
+                }
+                
+                level = getAssessmentLevel(assessmentScore);
+            }
+            
+            assessments.push({
+                asset_id: mapping.asset_id,
+                threat_id: mapping.threat_id,
+                score: assessmentScore,
+                level: level  // level сохраняется как assessment на бэкенде
+            });
+        }
+    });
+    
+    // Если нет данных для сохранения, просто перенаправляем
+    if (assessments.length === 0) {
+        console.log('Нет данных для сохранения');
+        alert('Нет данных для сохранения');
+        window.location.href = '/threats';
+        return;
+    }
+    
+    // Отправляем данные в базу данных
+    fetch('/api/threats/save-asset-probability-assessment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ assessments: assessments })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            console.log('Оценки успешно сохранены в базу данных');
+        } else {
+            console.error('Ошибка при сохранении оценок:', data.error);
+        }
+        
+        // Всегда перенаправляем, независимо от успеха
+        alert('Анализ завершен!');
+        window.location.href = '/threats';
+    })
+    .catch(error => {
+        console.error('Ошибка при отправке данных:', error);
+        
+        alert('Анализ завершен! (Ошибка сохранения в базу данных)');
+        window.location.href = '/threats';
+    });
+}
+</script>
+{% endblock %}
