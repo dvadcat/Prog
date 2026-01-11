@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка вероятности реализации угрозы - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка вероятности реализации угрозы</h2>
+        
+        <div class="alert alert-info">
+            <p>Оценка вероятности реализации угрозы, качественное и количественное значения. Определяет границы вероятности для качественных оценок: минимальная, средняя, высокая.</p>
+        </div>
+        
+        <div class="table-responsive mt-4">
+            <h4>Оценка вероятности реализации угрозы, качественное и количественное значения</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Качественное значение</th>
+                        <th>Количественное значение</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Минимальная</td>
+                        <td>[0.25; 0.4]</td>
+                    </tr>
+                    <tr>
+                        <td>Средняя</td>
+                        <td>(0.4; 0.7]</td>
+                    </tr>
+                    <tr>
+                        <td>Высокая</td>
+                        <td>(0.7; 1.0]</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="table-responsive mt-4">
+            <h5>Результаты оценки для угроз</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Угроза</th>
+                        <th>Количественное значение вероятности</th>
+                        <th>Качественное значение вероятности</th>
+                    </tr>
+                </thead>
+                <tbody id="evaluation-results-body">
+                    <!-- Содержимое таблицы будет генерироваться динамически -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-4">
+            <button class="btn btn-success" onclick="proceedToNextStage()">Перейти к следующему этапу</button>
+            <a href="{{ url_for('threat_probability_evaluation') }}" class="btn btn-secondary">Назад к оценке вероятности</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeThreats = [];
+    let finalProbabilities = {};
+    
+    // Загружаем данные из localStorage
+    window.onload = function() {
+        const storedThreats = localStorage.getItem('selectedThreats');
+        const storedProbabilities = localStorage.getItem('finalProbabilities');
+        
+        if (storedThreats && storedProbabilities) {
+            activeThreats = JSON.parse(storedThreats);
+            finalProbabilities = JSON.parse(storedProbabilities);
+            
+            generateEvaluationResults();
+        } else {
+            alert('Нет данных для оценки вероятности. Пожалуйста, вернитесь и завершите предыдущие этапы.');
+            window.location.href = '{{ url_for("select_threats") }}';
+        }
+    };
+    
+    function generateEvaluationResults() {
+        const tableBody = document.getElementById('evaluation-results-body');
+        tableBody.innerHTML = '';
+        
+        activeThreats.forEach(threat => {
+            const row = document.createElement('tr');
+            
+            const probability = finalProbabilities[threat.id] || 0;
+            const qualitativeValue = getQualitativeValue(probability);
+            
+            row.innerHTML = `
+                <td>${escapeHtml(truncString(threat.name, 30))}</td>
+                <td>${probability.toFixed(4)}</td>
+                <td>${qualitativeValue}</td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+    }
+    
+    function getQualitativeValue(probability) {
+        if (probability >= 0.25 && probability <= 0.4) {
+            return 'Минимальная';
+        } else if (probability > 0.4 && probability <= 0.7) {
+            return 'Средняя';
+        } else if (probability > 0.7 && probability <= 1.0) {
+            return 'Высокая';
+        } else {
+            return 'Не определено';
+        }
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text.toString()
+            .replace(/&/g, "&")
+            .replace(/</g, "<")
+            .replace(/>/g, ">")
+            .replace(/"/g, """)
+            .replace(/'/g, "&#039;");
+    }
+    
+    function truncString(str, maxLength) {
+        if (!str) return '';
+        return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
+    }
+    
+    function proceedToNextStage() {
+        // Сохраняем данные для следующего этапа
+        localStorage.setItem('evaluationResults', JSON.stringify({
+            threats: activeThreats,
+            probabilities: finalProbabilities
+        }));
+        
+        // Перенаправляем на следующий этап - таблицу 12 (оценка вероятности реализации угрозы для каждого актива)
+        window.location.href = '{{ url_for("asset_threat_probability_evaluation") }}';
+    }
+</script>
+{% endblock %}

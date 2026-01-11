@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Критерии оценки вероятности реализации угрозы - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Критерии оценки вероятности реализации угрозы</h2>
+        
+        <form method="POST" id="probability-criteria-form">
+            <div class="mb-3">
+                <label for="selected_threat" class="form-label">Выберите угрозу</label>
+                <select class="form-control" id="selected_threat" name="selected_threat" required>
+                    <option value="">Выберите угрозу...</option>
+                    {% for threat in threats %}
+                    <option value="{{ threat.id }}" data-name="{{ threat.name }}">
+                        {{ threat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row mt-4" id="criteria-table" style="display: none;">
+    <div class="col-12">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Признак</th>
+                    <th>1 балл</th>
+                    <th>2 балла</th>
+                    <th>3 балла</th>
+                    <th>4 балла</th>
+                    <th>Выбранное значение</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Продолжительность и непрерывность реализации угрозы</td>
+                    <td><input type="radio" name="duration" value="1" class="form-check-input"></td>
+                    <td><input type="radio" name="duration" value="2" class="form-check-input"></td>
+                    <td><input type="radio" name="duration" value="3" class="form-check-input"></td>
+                    <td><input type="radio" name="duration" value="4" class="form-check-input"></td>
+                    <td id="duration-value">-</td>
+                </tr>
+                <tr>
+                    <td>Возможность обнаружения реализации угрозы ИБ</td>
+                    <td><input type="radio" name="detectability" value="1" class="form-check-input"></td>
+                    <td><input type="radio" name="detectability" value="2" class="form-check-input"></td>
+                    <td><input type="radio" name="detectability" value="3" class="form-check-input"></td>
+                    <td><input type="radio" name="detectability" value="4" class="form-check-input"></td>
+                    <td id="detectability-value">-</td>
+                </tr>
+                <tr>
+                    <td>Возможность нейтрализации угрозы ИБ</td>
+                    <td><input type="radio" name="neutralization" value="1" class="form-check-input"></td>
+                    <td><input type="radio" name="neutralization" value="2" class="form-check-input"></td>
+                    <td><input type="radio" name="neutralization" value="3" class="form-check-input"></td>
+                    <td><input type="radio" name="neutralization" value="4" class="form-check-input"></td>
+                    <td id="neutralization-value">-</td>
+                </tr>
+                <tr>
+                    <td>Источник угрозы ИБ</td>
+                    <td><input type="radio" name="source" value="1" class="form-check-input"></td>
+                    <td><input type="radio" name="source" value="2" class="form-check-input"></td>
+                    <td><input type="radio" name="source" value="3" class="form-check-input"></td>
+                    <td><input type="radio" name="source" value="4" class="form-check-input"></td>
+                    <td id="source-value">-</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="mt-3">
+            <h4>Формула расчета:</h4>
+            <p>I = (A1 + A2 + A3 + A4) / (Amax * k)</p>
+            <p>Где:</p>
+            <ul>
+                <li>Ai - выбранное значение признака в баллах</li>
+                <li>Amax - максимальное значение признаков в баллах (в таблице Amax = 4)</li>
+                <li>k - количество признаков (в таблице k = 4)</li>
+            </ul>
+            <button type="button" class="btn btn-primary" onclick="calculateProbability()">Рассчитать вероятность</button>
+            <div id="probability-result" class="mt-3" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('selected_threat').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    if (selectedOption.value) {
+        // Показываем таблицу
+        document.getElementById('criteria-table').style.display = 'block';
+        
+        // Сбрасываем все выбранные значения
+        document.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.checked = false;
+        });
+        
+        // Сбрасываем результаты
+        document.getElementById('duration-value').textContent = '-';
+        document.getElementById('detectability-value').textContent = '-';
+        document.getElementById('neutralization-value').textContent = '-';
+        document.getElementById('source-value').textContent = '-';
+        document.getElementById('probability-result').style.display = 'none';
+    } else {
+        // Скрываем таблицу
+        document.getElementById('criteria-table').style.display = 'none';
+    }
+});
+
+// Обработчики для обновления отображаемых значений
+document.querySelectorAll('input[name="duration"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.getElementById('duration-value').textContent = this.value;
+    });
+});
+
+document.querySelectorAll('input[name="detectability"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.getElementById('detectability-value').textContent = this.value;
+    });
+});
+
+document.querySelectorAll('input[name="neutralization"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.getElementById('neutralization-value').textContent = this.value;
+    });
+});
+
+document.querySelectorAll('input[name="source"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.getElementById('source-value').textContent = this.value;
+    });
+});
+
+function calculateProbability() {
+    const duration = document.querySelector('input[name="duration"]:checked');
+    const detectability = document.querySelector('input[name="detectability"]:checked');
+    const neutralization = document.querySelector('input[name="neutralization"]:checked');
+    const source = document.querySelector('input[name="source"]:checked');
+    
+    if (!duration || !detectability || !neutralization || !source) {
+        alert('Пожалуйста, выберите значение для всех признаков');
+        return;
+    }
+    
+    const A1 = parseInt(duration.value);
+    const A2 = parseInt(detectability.value);
+    const A3 = parseInt(neutralization.value);
+    const A4 = parseInt(source.value);
+    
+    const Amax = 4; // максимальное значение признаков
+    const k = 4; // количество признаков
+    
+    const result = (A1 + A2 + A3 + A4) / (Amax * k);
+    
+    document.getElementById('probability-result').innerHTML = `
+        <h5>Результат:</h5>
+        <p>Вероятность: ${result.toFixed(4)} (T = (${A1}+${A2}+${A3}+${A4})/(${Amax}*${k}) = ${A1 + A2 + A3 + A4}/${Amax * k} = ${result.toFixed(4)})</p>
+        <p>Диапазон: [0.25; 1]</p>
+    `;
+    document.getElementById('probability-result').style.display = 'block';
+}
+</script>
+{% endblock %}

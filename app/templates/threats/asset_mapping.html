@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Сопоставление активов и угроз - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Сопоставление активов и угроз</h2>
+        
+        <div class="alert alert-info">
+            <p>Соответствие между активами и угрозами. Укажите, какие угрозы применимы к каким активам.</p>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h4>Активы</h4>
+                <div id="assets-list">
+                    <!-- Активы будут загружены через JavaScript -->
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h4>Выбранные угрозы</h4>
+                <div id="selected-threats-list">
+                    <!-- Выбранные угрозы будут загружены через JavaScript -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-responsive mt-4">
+            <h4>Соответствие между активами и угрозами</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Угроза ИБ</th>
+                        <th>Информационные активы</th>
+                        <th>Аппаратные средства</th>
+                        <th>Программные средства</th>
+                    </tr>
+                </thead>
+                <tbody id="mapping-table-body">
+                    <!-- Содержимое таблицы будет генерироваться динамически -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-4">
+            <button class="btn btn-primary" onclick="proceedToNextStage()">Перейти к следующему этапу</button>
+            <a href="{{ url_for('threat_assessment') }}" class="btn btn-secondary">Назад к оценке угроз</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let assets = [];
+    let selectedThreats = [];
+    let mappingData = {};
+    
+    // Загружаем выбранные угрозы из localStorage
+    window.onload = function() {
+        const storedThreats = localStorage.getItem('selectedThreats');
+        if (storedThreats) {
+            selectedThreats = JSON.parse(storedThreats);
+        } else {
+            alert('Не выбраны угрозы для сопоставления. Пожалуйста, вернитесь и выберите угрозы.');
+            window.location.href = '{{ url_for("select_threats") }}';
+        }
+        
+        // Загружаем активы
+        fetchData('/api/assets')
+            .then(data => {
+                if (data) {
+                    assets = data;
+                    renderAssetsAndThreats();
+                    generateMappingTable();
+                }
+            });
+    };
+    
+    function renderAssetsAndThreats() {
+        const assetsListDiv = document.getElementById('assets-list');
+        const threatsListDiv = document.getElementById('selected-threats-list');
+        
+        assetsListDiv.innerHTML = '';
+        threatsListDiv.innerHTML = '';
+        
+        // Рендерим активы
+        assets.forEach(asset => {
+            const assetDiv = document.createElement('div');
+            assetDiv.className = 'card mb-2';
+            assetDiv.innerHTML = `
+                <div class="card-body">
+                    <h6 class="card-title">${escapeHtml(asset.name)}</h6>
+                    <p class="card-text">${escapeHtml(truncString(asset.description, 50))}</p>
+                </div>
+            `;
+            assetsListDiv.appendChild(assetDiv);
+        });
+        
+        // Рендерим угрозы
+        selectedThreats.forEach(threat => {
+            const threatDiv = document.createElement('div');
+            threatDiv.className = 'card mb-2';
+            threatDiv.innerHTML = `
+                <div class="card-body">
+                    <h6 class="card-title">${escapeHtml(threat.name)}</h6>
+                    <p class="card-text">${escapeHtml(truncString(threat.description, 50))}</p>
+                </div>
+            `;
+            threatsListDiv.appendChild(threatDiv);
+        });
+    }
+    
+    function generateMappingTable() {
+        const tableBody = document.getElementById('mapping-table-body');
+        tableBody.innerHTML = '';
+        
+        selectedThreats.forEach(threat => {
+            const row = document.createElement('tr');
+            
+            // Создаем чекбоксы для каждого типа актива
+            let infoAssets = '<div class="form-check">';
+            let hardwareAssets = '<div class="form-check">';
+            let softwareAssets = '<div class="form-check">';
+            
+            assets.forEach(asset => {
+                // Предполагаем, что тип актива определяется по какому-то полю
+                // В реальном приложении это может быть отдельное поле или категория
+                const assetType = asset.category || 'информационный'; // по умолчанию информационный
+                
+                const checkboxId = `mapping_${threat.id}_${asset.id}`;
+                const checkboxHtml = `
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="${checkboxId}" 
+                               data-threat-id="${threat.id}" data-asset-id="${asset.id}" 
+                               data-asset-type="${assetType}">
+                        <label class="form-check-label" for="${checkboxId}">
+                            ${escapeHtml(asset.name)}
+                        </label>
+                    </div>
+                `;
+                
+                if (assetType.toLowerCase().includes('информацион') || assetType.toLowerCase() === 'информационные') {
+                    infoAssets += checkboxHtml;
+                } else if (assetType.toLowerCase().includes('аппарат') || assetType.toLowerCase() === 'аппаратные') {
+                    hardwareAssets += checkboxHtml;
+                } else if (assetType.toLowerCase().includes('программ') || assetType.toLowerCase() === 'программные') {
+                    softwareAssets += checkboxHtml;
+                } else {
+                    // Если тип не определен, добавляем во все категории для демонстрации
+                    infoAssets += checkboxHtml;
+                    hardwareAssets += checkboxHtml;
+                    softwareAssets += checkboxHtml;
+                }
+            });
+            
+            infoAssets += '</div>';
+            hardwareAssets += '</div>';
+            softwareAssets += '</div>';
+            
+            row.innerHTML = `
+                <td>${escapeHtml(truncString(threat.name, 30))}</td>
+                <td>${infoAssets}</td>
+                <td>${hardwareAssets}</td>
+                <td>${softwareAssets}</td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        // Добавляем обработчики для чекбоксов
+        document.querySelectorAll('input[type="checkbox"][id^="mapping_"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateMappingData(this);
+            });
+        });
+    }
+    
+    function updateMappingData(checkbox) {
+        const threatId = parseInt(checkbox.dataset.threatId);
+        const assetId = parseInt(checkbox.dataset.assetId);
+        const assetType = checkbox.dataset.assetType;
+        
+        if (!mappingData[threatId]) {
+            mappingData[threatId] = {};
+        }
+        
+        if (!mappingData[threatId][assetType]) {
+            mappingData[threatId][assetType] = [];
+        }
+        
+        if (checkbox.checked) {
+            if (!mappingData[threatId][assetType].includes(assetId)) {
+                mappingData[threatId][assetType].push(assetId);
+            }
+        } else {
+            mappingData[threatId][assetType] = mappingData[threatId][assetType].filter(id => id !== assetId);
+        }
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text.toString()
+            .replace(/&/g, "&")
+            .replace(/</g, "<")
+            .replace(/>/g, ">")
+            .replace(/"/g, """)
+            .replace(/'/g, "&#039;");
+    }
+    
+    function truncString(str, maxLength) {
+        if (!str) return '';
+        return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
+    }
+    
+    function proceedToNextStage() {
+        // Сохраняем данные сопоставления
+        localStorage.setItem('assetThreatMapping', JSON.stringify(mappingData));
+        localStorage.setItem('selectedThreats', JSON.stringify(selectedThreats));
+        localStorage.setItem('assets', JSON.stringify(assets));
+        
+        // Перенаправляем на следующий этап - таблицу 6 (перечень актуальных угроз ИБ активов)
+        window.location.href = '{{ url_for("threats_active_list") }}';
+    }
+    
+    async function fetchData(url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Ошибка при загрузке данных:', error);
+            return null;
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block title %}Выбор угроз и активов для анализа - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Выбор угроз и активов для анализа</h2>
+        
+        <div class="alert alert-info mb-3">
+            <strong>Выбрано угроз:</strong> <span id="selected-threats-count">0</span> | 
+            <strong>Выбрано активов:</strong> <span id="selected-assets-count">0</span>
+        </div>
+        
+        <div id="loading" class="text-center p-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2">Загрузка данных...</p>
+        </div>
+        
+        <div id="selection-container" style="display: none;">
+            <!-- Выбор угроз -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Выберите угрозы</h5>
+                </div>
+                <div class="card-body">
+                    <div id="threats-list">
+                        <!-- Угрозы будут загружены динамически -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Выбор активов -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Выберите активы</h5>
+                </div>
+                <div class="card-body">
+                    <div id="assets-list">
+                        <!-- Активы будут загружены динамически -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button class="btn btn-primary btn-lg" onclick="proceedWithSelected()">
+                    Построить таблицу
+                </button>
+                <button class="btn btn-secondary btn-lg ms-2" onclick="selectAll()">
+                    Выбрать все
+                </button>
+                <button class="btn btn-outline-secondary btn-lg ms-2" onclick="deselectAll()">
+                    Снять выделение
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let threats = [];
+let assets = [];
+
+// Загрузка данных при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadData();
+});
+
+function loadData() {
+    console.log('Начинаем загрузку данных...');
+    
+    // Показываем отладочную информацию
+    document.getElementById('loading').innerHTML =
+        '<div class="alert alert-info"><h5>Отладка</h5><p>Начинаем загрузку данных...</p></div>';
+    
+    // Загружаем угрозы
+    console.log('Загружаем угрозы с /api/threats/?only_relevant=true');
+    fetch('/api/threats/?only_relevant=true')
+        .then(response => {
+            console.log('Ответ от /api/threats/:', response.status, response.statusText);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(threatsData => {
+            console.log('Угрозы загружены:', threatsData.length, threatsData);
+            threats = threatsData;
+            
+            // Загружаем активы
+            console.log('Загружаем активы с /api/assets/');
+            return fetch('/api/assets/');
+        })
+        .then(response => {
+            console.log('Ответ от /api/assets/:', response.status, response.statusText);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(assetsData => {
+            console.log('Активы загружены:', assetsData.length, assetsData);
+            assets = assetsData;
+            
+            // Рендерим данные
+            renderThreats();
+            renderAssets();
+            updateSelectedCount();
+            
+            // Показываем контейнер и скрываем загрузку
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('selection-container').style.display = 'block';
+            
+            console.log('Данные успешно загружены и отрендерены');
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки данных:', error);
+            document.getElementById('loading').innerHTML =
+                `<div class="alert alert-danger">
+                    <h5>Ошибка загрузки данных</h5>
+                    <p>${error.message}</p>
+                    <p>Проверьте консоль браузера для получения подробной информации.</p>
+                    <button class="btn btn-primary" onclick="location.reload()">Обновить страницу</button>
+                </div>`;
+        });
+}
+
+function renderThreats() {
+    const threatsList = document.getElementById('threats-list');
+    threatsList.innerHTML = '';
+    
+    if (threats.length === 0) {
+        threatsList.innerHTML = '<p class="text-muted">Угрозы не найдены</p>';
+        return;
+    }
+    
+    threats.forEach(threat => {
+        const threatItem = document.createElement('div');
+        threatItem.className = 'border rounded p-3 mb-2 bg-light';
+        
+        const descriptionPreview = threat.description ? threat.description.substring(0, 150) : '';
+        const truncatedDesc = threat.description && threat.description.length > 150 ? descriptionPreview + '...' : descriptionPreview;
+        
+        threatItem.innerHTML = `
+            <div class="form-check">
+                <input class="form-check-input threat-checkbox" type="checkbox" value="${threat.id}" id="threat-${threat.id}">
+                <label class="form-check-label" for="threat-${threat.id}">
+                    <div class="fw-bold text-primary">${escapeHtml(threat.name || 'Без названия')}</div>
+                    <div class="text-muted small mt-1">${escapeHtml(truncatedDesc)}</div>
+                    <div class="mt-2">
+                        <small class="text-info">
+                            <i class="fas fa-info-circle"></i> 
+                            <strong>Источник:</strong> ${escapeHtml(threat.source || 'Не указан')}<br>
+                            <strong>Объект воздействия:</strong> ${escapeHtml(threat.target_object || 'Не указан')}
+                        </small>
+                    </div>
+                </label>
+            </div>
+        `;
+        
+        threatsList.appendChild(threatItem);
+    });
+}
+
+function renderAssets() {
+    const assetsList = document.getElementById('assets-list');
+    assetsList.innerHTML = '';
+    
+    if (assets.length === 0) {
+        assetsList.innerHTML = '<p class="text-muted">Активы не найдены</p>';
+        return;
+    }
+    
+    // Группируем активы по типам
+    const infoAssets = assets.filter(asset => asset.type === 'information');
+    const softwareAssets = assets.filter(asset => asset.type === 'software');
+    const hardwareAssets = assets.filter(asset => asset.type === 'hardware');
+    
+    // Функция для создания блока активов
+    function createAssetBlock(assetGroup, title, bgColor) {
+        if (assetGroup.length === 0) return;
+        
+        const blockHeader = document.createElement('div');
+        blockHeader.className = `alert alert-${bgColor} mb-2`;
+        blockHeader.innerHTML = `<h6 class="mb-0">${title}</h6>`;
+        assetsList.appendChild(blockHeader);
+        
+        assetGroup.forEach(asset => {
+            const assetItem = document.createElement('div');
+            assetItem.className = 'border rounded p-3 mb-2 bg-light';
+            
+            assetItem.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input asset-checkbox" type="checkbox" value="${asset.id}" id="asset-${asset.id}">
+                    <label class="form-check-label" for="asset-${asset.id}">
+                        <div class="fw-bold text-success">${escapeHtml(asset.name || 'Без названия')}</div>
+                        <div class="text-muted small mt-1">${escapeHtml(asset.description || 'Описание отсутствует')}</div>
+                    </label>
+                </div>
+            `;
+            
+            assetsList.appendChild(assetItem);
+        });
+    }
+    
+    // Создаем блоки для каждого типа активов
+    createAssetBlock(infoAssets, 'Информационные активы', 'info');
+    createAssetBlock(softwareAssets, 'Программные средства', 'success');
+    createAssetBlock(hardwareAssets, 'Аппаратные средства', 'warning');
+    
+    // Если есть активы других типов
+    const otherAssets = assets.filter(asset =>
+        asset.type !== 'information' &&
+        asset.type !== 'software' &&
+        asset.type !== 'hardware'
+    );
+    
+    if (otherAssets.length > 0) {
+        createAssetBlock(otherAssets, 'Прочие активы', 'secondary');
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, '"')
+        .replace(/'/g, "'");
+}
+
+function updateSelectedCount() {
+    const selectedThreatsCount = document.querySelectorAll('.threat-checkbox:checked').length;
+    const selectedAssetsCount = document.querySelectorAll('.asset-checkbox:checked').length;
+    
+    document.getElementById('selected-threats-count').textContent = selectedThreatsCount;
+    document.getElementById('selected-assets-count').textContent = selectedAssetsCount;
+    
+    // Добавляем обработчики для чекбоксов
+    document.querySelectorAll('.threat-checkbox, .asset-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedCount);
+    });
+}
+
+function selectAll() {
+    document.querySelectorAll('.threat-checkbox, .asset-checkbox').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateSelectedCount();
+}
+
+function deselectAll() {
+    document.querySelectorAll('.threat-checkbox, .asset-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateSelectedCount();
+}
+
+function proceedWithSelected() {
+    const selectedThreats = [];
+    const selectedAssets = [];
+    
+    // Собираем выбранные угрозы
+    document.querySelectorAll('.threat-checkbox:checked').forEach(checkbox => {
+        const threatId = parseInt(checkbox.value);
+        const threat = threats.find(t => t.id === threatId);
+        if (threat) {
+            selectedThreats.push(threat);
+        }
+    });
+    
+    // Собираем выбранные активы
+    document.querySelectorAll('.asset-checkbox:checked').forEach(checkbox => {
+        const assetId = parseInt(checkbox.value);
+        const asset = assets.find(a => a.id === assetId);
+        if (asset) {
+            selectedAssets.push(asset);
+        }
+    });
+
+    if (selectedThreats.length === 0) {
+        showAlert('Пожалуйста, выберите хотя бы одну угрозу', 'warning');
+        return;
+    }
+    
+    if (selectedAssets.length === 0) {
+        showAlert('Пожалуйста, выберите хотя бы один актив', 'warning');
+        return;
+    }
+
+    // Сохраняем выбранные данные в localStorage
+    localStorage.setItem('selectedThreats', JSON.stringify(selectedThreats));
+    localStorage.setItem('selectedAssets', JSON.stringify(selectedAssets));
+    
+    // Перенаправление на таблицу
+    window.location.href = '/threats/asset-probability-table';
+}
+
+function showAlert(message, type) {
+    // Создаем alert элемент
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Вставляем alert в начало контейнера
+    const container = document.querySelector('.col-12');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Автоматически скрываем через 5 секунд
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

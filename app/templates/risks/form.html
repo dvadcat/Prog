@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Редактирование риска' if risk else 'Создание риска' }} - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>{{ 'Редактирование риска' if risk else 'Создание риска' }}</h2>
+        
+        <form method="POST" id="risk-form">
+            <div class="form-section">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="incident_id" class="form-label">Инцидент</label>
+                            <select class="form-control" id="incident_id" name="incident_id" required>
+                                <option value="">Выберите инцидент</option>
+                                <!-- Инциденты будут загружены через JavaScript -->
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="likelihood" class="form-label">Вероятность</label>
+                            <select class="form-control" id="likelihood" name="likelihood">
+                                <option value="" {% if not risk or not risk.likelihood %}selected{% endif %}>Не оценено</option>
+                                <option value="низкая" {% if risk and risk.likelihood == 'низкая' %}selected{% endif %}>Низкая</option>
+                                <option value="средняя" {% if risk and risk.likelihood == 'средняя' %}selected{% endif %}>Средняя</option>
+                                <option value="высокая" {% if risk and risk.likelihood == 'высокая' %}selected{% endif %}>Высокая</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="impact_level" class="form-label">Воздействие</label>
+                            <select class="form-control" id="impact_level" name="impact_level">
+                                <option value="" {% if not risk or not risk.impact_level %}selected{% endif %}>Не оценено</option>
+                                <option value="низкий" {% if risk and risk.impact_level == 'низкий' %}selected{% endif %}>Низкий</option>
+                                <option value="средний" {% if risk and risk.impact_level == 'средний' %}selected{% endif %}>Средний</option>
+                                <option value="высокий" {% if risk and risk.impact_level == 'высокий' %}selected{% endif %}>Высокий</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="risk_level" class="form-label">Уровень риска</label>
+                            <select class="form-control" id="risk_level" name="risk_level">
+                                <option value="" {% if not risk or not risk.risk_level %}selected{% endif %}>Не оценено</option>
+                                <option value="низкий" {% if risk and risk.risk_level == 'низкий' %}selected{% endif %}>Низкий</option>
+                                <option value="средний" {% if risk and risk.risk_level == 'средний' %}selected{% endif %}>Средний</option>
+                                <option value="высокий" {% if risk and risk.risk_level == 'высокий' %}selected{% endif %}>Высокий</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="acceptable" name="acceptable" {% if risk and risk.acceptable %}checked{% endif %}>
+                            <label class="form-check-label" for="acceptable">Приемлемый риск</label>
+                        </div>
+                    </div>
+                
+            <button type="submit" class="btn btn-primary">{{ 'Сохранить изменения' if risk else 'Создать риск' }}</button>
+            <a href="{{ url_for('risks_list') }}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+
+<script>
+// Загрузка инцидентов
+fetch('/api/incidents')
+    .then(response => response.json())
+    .then(data => {
+        const incidentSelect = document.getElementById('incident_id');
+        data.forEach(incident => {
+            const option = document.createElement('option');
+            option.value = incident.id;
+            option.textContent = `Инцидент #${incident.id}: ${incident.scenario_name || 'Без названия'}`;
+            if ({{ risk.incident_id if risk else 0 }} === incident.id) {
+                option.selected = true;
+            }
+            incidentSelect.appendChild(option);
+        });
+    });
+
+document.getElementById('risk-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = {
+        incident_id: parseInt(document.getElementById('incident_id').value),
+        likelihood: document.getElementById('likelihood').value,
+        impact_level: document.getElementById('impact_level').value,
+        risk_level: document.getElementById('risk_level').value,
+        acceptable: document.getElementById('acceptable').checked
+    };
+    
+    const riskId = {{ risk.id if risk else 'null' }};
+    let requestUrl, method;
+    
+    if (riskId) {
+        // Редактирование
+        requestUrl = `/api/risks/${riskId}`;
+        method = 'PUT';
+    } else {
+        // Создание
+        requestUrl = '/api/risks';
+        method = 'POST';
+    }
+    
+    fetch(requestUrl, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Ошибка при сохранении');
+        }
+    })
+    .then(data => {
+        showNotification('Риск успешно сохранен', 'success');
+        window.location.href = "{{ url_for('risks_list') }}";
+    })
+    .catch(error => {
+        showNotification('Ошибка при сохранении риска', 'danger');
+        console.error('Error:', error);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Редактирование инцидента' if incident else 'Создание инцидента' }} - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>{{ 'Редактирование инцидента' if incident else 'Создание инцидента' }}</h2>
+        
+        <form method="POST" id="incident-form">
+            <div class="form-section">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="mb-3">
+                            <label for="assets-select" class="form-label">Активы (можно выбрать несколько)</label>
+                            <select class="form-control" id="assets-select" name="assets" multiple size="5">
+                                <!-- Активы будут загружены через JavaScript -->
+                            </select>
+                            <div class="form-text">Удерживайте Ctrl для выбора нескольких активов</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="threats-select" class="form-label">Угрозы (можно выбрать несколько)</label>
+                            <select class="form-control" id="threats-select" name="threats" multiple size="5">
+                                <!-- Угрозы будут загружены через JavaScript -->
+                            </select>
+                            <div class="form-text">Удерживайте Ctrl для выбора нескольких угроз</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="vulnerabilities-select" class="form-label">Уязвимости (можно выбрать несколько)</label>
+                            <select class="form-control" id="vulnerabilities-select" name="vulnerabilities" multiple size="5">
+                                <!-- Уязвимости будут загружены через JavaScript -->
+                            </select>
+                            <div class="form-text">Удерживайте Ctrl для выбора нескольких уязвимостей</div>
+                        </div>
+                        
+                    </div>
+                
+            <button type="submit" class="btn btn-primary">{{ 'Сохранить изменения' if incident else 'Создать инцидент' }}</button>
+            <a href="{{ url_for('incident_bp.incidents_list_page') }}" class="btn btn-secondary">Отмена</a>
+        </form>
+    </div>
+</div>
+
+<script>
+// Глобальные переменные для хранения данных
+let allAssets = [];
+let allThreats = [];
+let assetThreatMap = {}; // Карта соответствия активов и угроз
+
+// Загрузка активов, угроз (только актуальных) и уязвимостей
+Promise.all([
+    fetch('/api/assets').then(response => response.json()),
+    fetch('/api/threats?only_relevant=true').then(response => response.json()),
+    fetch('/api/vulnerabilities').then(response => response.json())
+]).then(([assets, threats, vulnerabilities]) => {
+    allAssets = assets;
+    allThreats = threats;
+    
+    const assetsSelect = document.getElementById('assets-select');
+    const threatsSelect = document.getElementById('threats-select');
+    const vulnerabilitiesSelect = document.getElementById('vulnerabilities-select');
+    
+    // Строим карту соответствия активов и угроз на основе step5
+    threats.forEach(threat => {
+        if (threat.step5) {
+            try {
+                const step5Data = JSON.parse(threat.step5);
+                // Определяем какие типы активов подходят для этой угрозы
+                const assetTypes = [];
+                if (step5Data.info_conf || step5Data.info_int || step5Data.info_av) {
+                    assetTypes.push('information');
+                }
+                if (step5Data.hw_conf || step5Data.hw_int || step5Data.hw_av) {
+                    assetTypes.push('hardware');
+                }
+                if (step5Data.sw_conf || step5Data.sw_int || step5Data.sw_av) {
+                    assetTypes.push('software');
+                }
+                assetThreatMap[threat.id] = assetTypes;
+            } catch (e) {
+                console.error('Ошибка парсинга step5:', e);
+            }
+        }
+    });
+    
+    assets.forEach(asset => {
+        const option = document.createElement('option');
+        option.value = asset.id;
+        option.dataset.type = asset.type;
+        
+        // Формируем отображение актива с К, Д, Ц
+        let assetDisplay = asset.name;
+        
+        // Парсим JSON свойства актива
+        if (asset.properties) {
+            try {
+                const properties = JSON.parse(asset.properties);
+                const assetProps = [];
+                if (properties.confidentiality) assetProps.push('К');
+                if (properties.availability) assetProps.push('Д');
+                if (properties.integrity) assetProps.push('Ц');
+                
+                if (assetProps.length > 0) {
+                    assetDisplay += ` (${assetProps.join(', ')})`;
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга свойств актива:', e);
+            }
+        }
+        
+        option.textContent = assetDisplay;
+        assetsSelect.appendChild(option);
+    });
+    
+    threats.forEach(threat => {
+        const option = document.createElement('option');
+        option.value = threat.id;
+        
+        // Формируем отображение угрозы с К, Д, Ц и соответствующими активами
+        let threatDisplay = threat.name;
+        const properties = [];
+        if (threat.confidentiality_violation) properties.push('К');
+        if (threat.availability_violation) properties.push('Д');
+        if (threat.integrity_violation) properties.push('Ц');
+        
+        // Находим активы, которые соответствуют этой угрозе
+        const matchingAssets = [];
+        if (assetThreatMap[threat.id]) {
+            assets.forEach(asset => {
+                if (assetThreatMap[threat.id].includes(asset.type)) {
+                    matchingAssets.push(asset.name);
+                }
+            });
+        }
+        
+        let suffix = '';
+        if (properties.length > 0) {
+            suffix += properties.join(', ');
+        }
+        if (matchingAssets.length > 0) {
+            suffix += (suffix ? ' | ' : '') + 'Активы: ' + matchingAssets.slice(0, 3).join(', ');
+            if (matchingAssets.length > 3) suffix += '...';
+        }
+        if (suffix) {
+            threatDisplay += ` (${suffix})`;
+        }
+        
+        option.textContent = threatDisplay;
+        threatsSelect.appendChild(option);
+    });
+    
+    vulnerabilities.forEach(vulnerability => {
+        const option = document.createElement('option');
+        option.value = vulnerability.id;
+        option.textContent = vulnerability.name;
+        vulnerabilitiesSelect.appendChild(option);
+    });
+    
+    // Предзаполняем выбранные элементы при редактировании
+    const incidentId = {{ incident.id if incident else 'null' }};
+    if (incidentId) {
+        // Загружаем данные инцидента для предзаполнения
+        fetch(`/api/incidents/${incidentId}`)
+            .then(response => response.json())
+            .then(incident => {
+                // Выбираем соответствующие опции
+                const assetOption = Array.from(assetsSelect.options).find(option =>
+                    parseInt(option.value) === incident.asset_id
+                );
+                if (assetOption) assetOption.selected = true;
+                
+                const threatOption = Array.from(threatsSelect.options).find(option =>
+                    parseInt(option.value) === incident.threat_id
+                );
+                if (threatOption) threatOption.selected = true;
+                
+                const vulnerabilityOption = Array.from(vulnerabilitiesSelect.options).find(option =>
+                    parseInt(option.value) === incident.vulnerability_id
+                );
+                if (vulnerabilityOption) vulnerabilityOption.selected = true;
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки данных инцидента:', error);
+            });
+    }
+});
+
+document.getElementById('incident-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Получаем выбранные элементы
+    const selectedAssets = Array.from(document.getElementById('assets-select').selectedOptions).map(option => parseInt(option.value));
+    const selectedThreats = Array.from(document.getElementById('threats-select').selectedOptions).map(option => parseInt(option.value));
+    const selectedVulnerabilities = Array.from(document.getElementById('vulnerabilities-select').selectedOptions).map(option => option.value);
+    
+    // Проверяем, что выбраны все необходимые элементы
+    if (selectedAssets.length === 0) {
+        showNotification('Пожалуйста, выберите хотя бы один актив', 'warning');
+        return;
+    }
+    
+    if (selectedThreats.length === 0) {
+        showNotification('Пожалуйста, выберите хотя бы одну угрозу', 'warning');
+        return;
+    }
+    
+    if (selectedVulnerabilities.length === 0) {
+        showNotification('Пожалуйста, выберите хотя бы одну уязвимость', 'warning');
+        return;
+    }
+    
+    const incidentId = {{ incident.id if incident else 'null' }};
+    let requestUrl, method, formData;
+    
+    if (incidentId) {
+        // Редактирование - отправляем данные в формате для PUT
+        requestUrl = `/api/incidents/${incidentId}`;
+        method = 'PUT';
+        formData = {
+            asset_id: selectedAssets[0], // Берем первый выбранный актив
+            threat_id: selectedThreats[0], // Берем первую выбранную угрозу
+            vulnerability_id: selectedVulnerabilities[0] // Берем первую выбранную уязвимость
+        };
+    } else {
+        // Создание - отправляем данные в формате для POST
+        requestUrl = '/api/incidents';
+        method = 'POST';
+        formData = {
+            assets: selectedAssets,
+            threats: selectedThreats,
+            vulnerabilities: selectedVulnerabilities
+        };
+    }
+    
+    fetch(requestUrl, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        } else {
+            throw new Error('Ошибка при сохранении');
+        }
+    })
+    .then(data => {
+        showNotification('Инцидент успешно сохранен', 'success');
+        
+        if (incidentId) {
+            // При редактировании перенаправляем на список инцидентов
+            window.location.href = '/api/incidents/list';
+        } else {
+            // При создании перенаправляем на страницу редактирования последствий
+            // Передаем информацию о том, что это множественное создание
+            window.location.href = `/incidents/${data.id}/edit-consequences?batch=true`;
+        }
+    })
+    .catch(error => {
+        showNotification('Ошибка при сохранении инцидента', 'danger');
+        console.error('Error:', error);
+    });
+});
+</script>
+{% endblock %}

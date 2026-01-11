@@ -1,0 +1,126 @@
+/* Общие стили для системы управления рисками ИБ */
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f8f9fa;
+}
+
+.card {
+    margin-bottom: 1rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.table th {
+    background-color: #e9ecef;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.alert {
+    border-radius: 0.375rem;
+}
+
+/* Стили для таблиц */
+.data-table {
+    background-color: white;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+/* Стили для форм */
+.form-section {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1.5rem;
+}
+
+/* Стили для карточек модулей */
+.module-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.module-card .card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.module-card .card-body .card-text {
+    flex: 1;
+}
+
+/* Цветовые индикаторы рисков */
+.risk-level {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    color: white;
+    font-weight: 500;
+}
+
+.risk-level-low {
+    background-color: #198754; /* Зеленый */
+}
+
+.risk-level-medium {
+    background-color: #ffc107; /* Желтый */
+    color: #00;
+}
+
+.risk-level-high {
+    background-color: #dc3545; /* Красный */
+}
+
+.risk-level-critical {
+    background-color: #6f42c1; /* Фиолетовый */
+}
+
+/* Стили для прогресс-бара выполнения мероприятий */
+.progress-treatment {
+    height: 1.5rem;
+}
+
+.progress-treatment .progress-bar {
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Стили для кнопок экспорта */
+.export-buttons {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.export-buttons .btn {
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+}

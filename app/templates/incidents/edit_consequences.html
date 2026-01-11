@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование последствий инцидентов - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Редактирование последствий инцидентов</h2>
+        
+        <div class="mb-3">
+            <a href="{{ url_for('incident_bp.incidents_list_page') }}" class="btn btn-secondary">Вернуться к списку</a>
+            <button class="btn btn-success" onclick="saveAllConsequences()">Сохранить все последствия</button>
+        </div>
+
+        <div id="scenarios-container">
+            <!-- Блоки для каждого сценария инцидента будут созданы через JavaScript -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let incidents = [];
+let assets = [];
+let threats = [];
+let vulnerabilities = [];
+let relatedIncidents = [];
+
+// Загрузка данных при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadData();
+});
+
+function loadData() {
+    // Загружаем все необходимые данные
+    Promise.all([
+        fetch('/api/incidents').then(response => response.json()),
+        fetch('/api/assets').then(response => response.json()),
+        fetch('/api/threats').then(response => response.json()),
+        fetch('/api/vulnerabilities').then(response => response.json())
+    ])
+    .then(([incidentsData, assetsData, threatsData, vulnerabilitiesData]) => {
+        incidents = incidentsData;
+        assets = assetsData;
+        threats = threatsData;
+        vulnerabilities = vulnerabilitiesData;
+        
+        renderScenarios();
+    })
+    .catch(error => {
+        console.error('Ошибка загрузки данных:', error);
+        showNotification('Ошибка загрузки данных', 'danger');
+    });
+}
+
+function renderScenarios() {
+    const container = document.getElementById('scenarios-container');
+    container.innerHTML = '';
+
+    // Проверяем, является ли это batch созданием
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBatch = urlParams.get('batch') === 'true';
+    
+    const currentIncident = incidents.find(i => i.id === {{ incident.id }});
+    if (!currentIncident) {
+        container.innerHTML = '<div class="alert alert-warning">Инцидент не найден</div>';
+        return;
+    }
+
+    let relatedIncidents = [];
+    
+    if (isBatch) {
+        // Для batch создания ищем все инциденты, созданные в течение 1 минуты после текущего
+        const currentTime = new Date(currentIncident.created_at).getTime();
+        const timeThreshold = 60 * 1000; // 1 минута в миллисекундах
+        
+        relatedIncidents = incidents.filter(i => {
+            const incidentTime = new Date(i.created_at).getTime();
+            return incidentTime >= currentTime && incidentTime <= (currentTime + timeThreshold);
+        });
+        
+        // Если не нашли по времени, ищем по сценариям с похожими именами
+        if (relatedIncidents.length === 0) {
+            const currentScenarioPrefix = currentIncident.scenario_name ? currentIncident.scenario_name.replace(/\d+$/, '') : 'СИ';
+            relatedIncidents = incidents.filter(i =>
+                i.scenario_name && i.scenario_name.startsWith(currentScenarioPrefix)
+            );
+        }
+    } else {
+        // Для одиночного создания показываем только текущий инцидент
+        relatedIncidents = [currentIncident];
+    }
+
+    if (relatedIncidents.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">Связанные инциденты не найдены</div>';
+        return;
+    }
+
+    relatedIncidents.forEach((incident, index) => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        const threat = threats.find(t => t.id === incident.threat_id);
+        const vulnerability = vulnerabilities.find(v => v.id === incident.vulnerability_id);
+        
+        const scenarioBlock = document.createElement('div');
+        scenarioBlock.className = 'card mb-4';
+        scenarioBlock.innerHTML = `
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Сценарий инцидента ${incident.scenario_name || `СИ${incident.id}`}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Информация о сценарии:</h6>
+                        <p><strong>Актив:</strong> ${escapeHtml(asset ? asset.name : 'Неизвестный актив')}</p>
+                        <p><strong>Угроза:</strong> ${escapeHtml(threat ? threat.name : 'Неизвестная угроза')}</p>
+                        <p><strong>Уязвимость:</strong> ${escapeHtml(vulnerability ? vulnerability.name : 'Неизвестная уязвимость')}</p>
+                        <div class="mb-3">
+                            <label for="impact_level_${incident.id}" class="form-label">Уровень воздействия</label>
+                            <select class="form-control" id="impact_level_${incident.id}" name="impact_level_${incident.id}">
+                                <option value="" ${!incident.impact_level ? 'selected' : ''}>Не оценено</option>
+                                <option value="низкий" ${incident.impact_level === 'низкий' ? 'selected' : ''}>Низкий</option>
+                                <option value="средний" ${incident.impact_level === 'средний' ? 'selected' : ''}>Средний</option>
+                                <option value="высокий" ${incident.impact_level === 'высокий' ? 'selected' : ''}>Высокий</option>
+                                <option value="критический" ${incident.impact_level === 'критический' ? 'selected' : ''}>Критический</option>
+                            </select>
+                            <div class="form-text">
+                                <small>Автоматически устанавливается на основе ценности актива с зависимостями: <strong id="asset_value_${incident.id}">${asset ? asset.dependency_value || 'Не указано' : 'Неизвестно'}</strong></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="operational_impact_${incident.id}" class="form-label">Операционные последствия</label>
+                            <textarea class="form-control" id="operational_impact_${incident.id}" rows="3"
+                                placeholder="Опишите операционные последствия...">${escapeHtml(incident.operational_impact || '')}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="business_impact_${incident.id}" class="form-label">Бизнес-последствия</label>
+                            <textarea class="form-control" id="business_impact_${incident.id}" rows="3"
+                                placeholder="Опишите бизнес-последствия...">${escapeHtml(incident.business_impact || '')}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(scenarioBlock);
+    });
+    
+    // Автоматически устанавливаем уровни воздействия на основе ценности активов
+    setTimeout(() => {
+        autoSetImpactLevels();
+    }, 100);
+}
+
+// Переопределяем renderScenarios для обновления глобального массива
+const originalRenderScenarios = renderScenarios;
+renderScenarios = function() {
+    const container = document.getElementById('scenarios-container');
+    container.innerHTML = '';
+
+    // Проверяем, является ли это batch созданием
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBatch = urlParams.get('batch') === 'true';
+    
+    const currentIncident = incidents.find(i => i.id === {{ incident.id }});
+    if (!currentIncident) {
+        container.innerHTML = '<div class="alert alert-warning">Инцидент не найден</div>';
+        return;
+    }
+
+    // Очищаем глобальный массив
+    relatedIncidents = [];
+    
+    if (isBatch) {
+        // Для batch создания ищем все инциденты, созданные в течение 1 минуты после текущего
+        const currentTime = new Date(currentIncident.created_at).getTime();
+        const timeThreshold = 60 * 1000; // 1 минута в миллисекундах
+        
+        relatedIncidents = incidents.filter(i => {
+            const incidentTime = new Date(i.created_at).getTime();
+            return incidentTime >= currentTime && incidentTime <= (currentTime + timeThreshold);
+        });
+        
+        // Если не нашли по времени, ищем по сценариям с похожими именами
+        if (relatedIncidents.length === 0) {
+            const currentScenarioPrefix = currentIncident.scenario_name ? currentIncident.scenario_name.replace(/\d+$/, '') : 'СИ';
+            relatedIncidents = incidents.filter(i =>
+                i.scenario_name && i.scenario_name.startsWith(currentScenarioPrefix)
+            );
+        }
+    } else {
+        // Для одиночного создания показываем только текущий инцидент
+        relatedIncidents = [currentIncident];
+    }
+
+    if (relatedIncidents.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning">Связанные инциденты не найдены</div>';
+        return;
+    }
+
+    relatedIncidents.forEach((incident, index) => {
+        const asset = assets.find(a => a.id === incident.asset_id);
+        const threat = threats.find(t => t.id === incident.threat_id);
+        const vulnerability = vulnerabilities.find(v => v.id === incident.vulnerability_id);
+        
+        const scenarioBlock = document.createElement('div');
+        scenarioBlock.className = 'card mb-4';
+        scenarioBlock.innerHTML = `
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Сценарий инцидента ${incident.scenario_name || `СИ${incident.id}`}</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Информация о сценарии:</h6>
+                        <p><strong>Актив:</strong> ${escapeHtml(asset ? asset.name : 'Неизвестный актив')}</p>
+                        <p><strong>Угроза:</strong> ${escapeHtml(threat ? threat.name : 'Неизвестная угроза')}</p>
+                        <p><strong>Уязвимость:</strong> ${escapeHtml(vulnerability ? vulnerability.name : 'Неизвестная уязвимость')}</p>
+                        <div class="mb-3">
+                            <label for="impact_level_${incident.id}" class="form-label">Уровень воздействия</label>
+                            <select class="form-control" id="impact_level_${incident.id}" name="impact_level_${incident.id}">
+                                <option value="" ${!incident.impact_level ? 'selected' : ''}>Не оценено</option>
+                                <option value="низкий" ${incident.impact_level === 'низкий' ? 'selected' : ''}>Низкий</option>
+                                <option value="средний" ${incident.impact_level === 'средний' ? 'selected' : ''}>Средний</option>
+                                <option value="высокий" ${incident.impact_level === 'высокий' ? 'selected' : ''}>Высокий</option>
+                                <option value="критический" ${incident.impact_level === 'критический' ? 'selected' : ''}>Критический</option>
+                            </select>
+                            <div class="form-text">
+                                <small>Автоматически устанавливается на основе ценности актива с зависимостями: <strong id="asset_value_${incident.id}">${asset ? asset.dependency_value || 'Не указано' : 'Неизвестно'}</strong></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="operational_impact_${incident.id}" class="form-label">Операционные последствия</label>
+                            <textarea class="form-control" id="operational_impact_${incident.id}" rows="3"
+                                placeholder="Опишите операционные последствия...">${escapeHtml(incident.operational_impact || '')}</textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="business_impact_${incident.id}" class="form-label">Бизнес-последствия</label>
+                            <textarea class="form-control" id="business_impact_${incident.id}" rows="3"
+                                placeholder="Опишите бизнес-последствия...">${escapeHtml(incident.business_impact || '')}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(scenarioBlock);
+    });
+    
+    // Автоматически устанавливаем уровни воздействия на основе ценности активов
+    setTimeout(() => {
+        autoSetImpactLevels();
+    }, 100);
+}
+
+// Функция для автоматической установки уровня воздействия
+function autoSetImpactLevels() {
+    console.log('Начинаем автоматическую установку уровней воздействия...');
+    console.log('Количество relatedIncidents:', relatedIncidents.length);
+    
+    relatedIncidents.forEach((incident, index) => {
+        console.log(`\nОбрабатываем инцидент ${index + 1}:`, incident.id);
+        const asset = assets.find(a => a.id === incident.asset_id);
+        console.log('Найденный актив:', asset);
+        
+        if (asset) {
+            console.log('dependency_value актива:', asset.dependency_value);
+            console.log('existing impact_level:', incident.impact_level);
+            
+            if (asset.dependency_value) {
+                const impactLevelSelect = document.getElementById(`impact_level_${incident.id}`);
+                console.log('Найденный select элемент:', impactLevelSelect);
+                
+                if (impactLevelSelect && !incident.impact_level) { // Устанавливаем только если еще не установлен
+                    const mappedLevel = mapAssetValueToImpactLevel(asset.dependency_value);
+                    console.log('Результат маппинга:', mappedLevel);
+                    
+                    if (mappedLevel) {
+                        impactLevelSelect.value = mappedLevel;
+                        console.log(`✅ Автоматически установлен уровень воздействия "${mappedLevel}" для инцидента ${incident.id}`);
+                    } else {
+                        console.log('❌ Маппинг вернул пустое значение');
+                    }
+                } else {
+                    if (!impactLevelSelect) {
+                        console.log('❌ Select элемент не найден');
+                    } else {
+                        console.log('❌ Уровень воздействия уже установлен:', incident.impact_level);
+                    }
+                }
+            } else {
+                console.log('❌ dependency_value пустой или null');
+            }
+        } else {
+            console.log('❌ Актив не найден для инцидента');
+        }
+    });
+}
+
+// Функция соответствия ценности актива уровню воздействия
+function mapAssetValueToImpactLevel(assetValue) {
+    const mapping = {
+        '-': '', // Не оценено
+        'низкая': 'низкий',
+        'средняя': 'средний',
+        'высокая': 'высокий'
+    };
+    
+    return mapping[assetValue] || '';
+}
+
+function saveAllConsequences() {
+    const currentIncident = incidents.find(i => i.id === {{ incident.id }});
+    if (!currentIncident) {
+        showNotification('Инцидент не найден', 'danger');
+        return;
+    }
+
+    // Находим все связанные инциденты (те же условия что и в renderScenarios)
+    const urlParams = new URLSearchParams(window.location.search);
+    const isBatch = urlParams.get('batch') === 'true';
+    
+    let relatedIncidents = [];
+    
+    if (isBatch) {
+        const currentTime = new Date(currentIncident.created_at).getTime();
+        const timeThreshold = 60 * 1000; // 1 минута в миллисекундах
+        
+        relatedIncidents = incidents.filter(i => {
+            const incidentTime = new Date(i.created_at).getTime();
+            return incidentTime >= currentTime && incidentTime <= (currentTime + timeThreshold);
+        });
+        
+        // Если не нашли по времени, ищем по сценариям с похожими именами
+        if (relatedIncidents.length === 0) {
+            const currentScenarioPrefix = currentIncident.scenario_name ? currentIncident.scenario_name.replace(/\d+$/, '') : 'СИ';
+            relatedIncidents = incidents.filter(i =>
+                i.scenario_name && i.scenario_name.startsWith(currentScenarioPrefix)
+            );
+        }
+    } else {
+        relatedIncidents = [currentIncident];
+    }
+
+    const updatePromises = relatedIncidents.map(incident => {
+        const operationalImpact = document.getElementById(`operational_impact_${incident.id}`).value;
+        const businessImpact = document.getElementById(`business_impact_${incident.id}`).value;
+        const impactLevel = document.getElementById(`impact_level_${incident.id}`).value;
+        
+        const updateData = {
+            operational_impact: operationalImpact,
+            business_impact: businessImpact,
+            impact_level: impactLevel
+        };
+
+        return fetch(`/api/incidents/${incident.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(updateData)
+        });
+    });
+
+    Promise.all(updatePromises)
+        .then(responses => {
+            const allOk = responses.every(response => response.ok);
+            if (allOk) {
+                showNotification('Все последствия успешно сохранены', 'success');
+                // Перенаправляем на страницу с таблицами
+                window.location.href = `/incidents/${currentIncident.id}/tables`;
+            } else {
+                throw new Error('Ошибка при сохранении некоторых данных');
+            }
+        })
+        .catch(error => {
+            showNotification('Ошибка при сохранении последствий', 'danger');
+            console.error('Error:', error);
+        });
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString()
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, '"')
+        .replace(/'/g, "'");
+}
+
+function showNotification(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.col-12');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

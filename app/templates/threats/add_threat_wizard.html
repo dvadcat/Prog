@@ -1,0 +1,1457 @@
+{% extends "base.html" %}
+
+{% block title %}Добавление угрозы - Программное средство для оценки рисков ИБ{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Добавление угрозы</h2>
+        
+        <div class="progress mb-4">
+            <div class="progress-bar" role="progressbar" style="width: {{ progress }}%" id="progress-bar">{{ progress }}%</div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                {% if step == 0 %}
+                <h4>Создание угрозы</h4>
+                {% else %}
+                <h4>{{ step_title }}</h4>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if step == 0 %}
+                <form method="POST" id="step0-form">
+                    <div class="mb-3">
+                        <label for="new_threat_name" class="form-label">Название новой угрозы</label>
+                        <input type="text" class="form-control" id="new_threat_name" name="new_threat_name" placeholder="Введите название угрозы" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_threat_description" class="form-label">Описание угрозы</label>
+                        <textarea class="form-control" id="new_threat_description" name="new_threat_description" rows="3" placeholder="Введите описание угрозы"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_threat_source" class="form-label">Источник угрозы</label>
+                        <input type="text" class="form-control" id="new_threat_source" name="new_threat_source" placeholder="Введите источник угрозы">
+                    </div>
+                    <div class="mb-3">
+                        <label for="new_threat_target" class="form-label">Объект воздействия</label>
+                        <input type="text" class="form-control" id="new_threat_target" name="new_threat_target" placeholder="Введите объект воздействия">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Нарушение свойств ИБ</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="new_confidentiality_violation" name="new_confidentiality_violation">
+                            <label class="form-check-label" for="new_confidentiality_violation">Нарушение конфиденциальности</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="new_integrity_violation" name="new_integrity_violation">
+                            <label class="form-check-label" for="new_integrity_violation">Нарушение целостности</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="new_availability_violation" name="new_availability_violation">
+                            <label class="form-check-label" for="new_availability_violation">Нарушение доступности</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="createNewThreat()">Создать угрозу</button>
+                </form>
+                
+                {% elif step == 1 %}
+                <h5>{{ selected_threat.name }}</h5>
+                <form method="POST" id="step1-form">
+                    <div class="mb-3">
+                        <label for="selected_threat" class="form-label">Выбранная угроза</label>
+                        <select class="form-control" id="selected_threat" name="selected_threat" required onchange="loadThreatInfo(1)">
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}" data-description="{{ threat.description }}"
+                                    data-source="{{ threat.source }}" data-target="{{ threat.target_object }}"
+                                    data-conf="{{ threat.confidentiality_violation }}" data-int="{{ threat.integrity_violation }}"
+                                    data-avail="{{ threat.availability_violation }}"
+                                    {% if edit_threat_id and threat.id == edit_threat_id %}selected{% endif %}>
+                                {{ threat.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="threat_name_1" class="form-label">Наименование угрозы</label>
+                        <input type="text" class="form-control" id="threat_name_1" name="threat_name" value="{{ selected_threat.name if selected_threat else '' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description_1" class="form-label">Описание угрозы</label>
+                        <textarea class="form-control" id="description_1" name="description" rows="3" required>{{ selected_threat.description if selected_threat else '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="source_1" class="form-label">Источники угрозы</label>
+                        <textarea class="form-control" id="source_1" name="source" rows="2">{{ selected_threat.source if selected_threat else '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="target_1" class="form-label">Объект воздействия</label>
+                        <textarea class="form-control" id="target_1" name="target_object" rows="2">{{ selected_threat.target_object if selected_threat else '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Нарушение свойств ИБ</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="confidentiality_violation_1" name="confidentiality_violation" {% if selected_threat and selected_threat.confidentiality_violation %}checked{% endif %}>
+                            <label class="form-check-label" for="confidentiality_violation_1">Нарушение конфиденциальности</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="integrity_violation_1" name="integrity_violation" {% if selected_threat and selected_threat.integrity_violation %}checked{% endif %}>
+                            <label class="form-check-label" for="integrity_violation_1">Нарушение целостности</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="availability_violation_1" name="availability_violation" {% if selected_threat and selected_threat.availability_violation %}checked{% endif %}>
+                            <label class="form-check-label" for="availability_violation_1">Нарушение доступности</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(5)">Далее</button>
+                </form>
+                
+                
+                {% elif step == 5 %}
+                <h5>Соответствие между активами и угрозами</h5>
+                <form method="POST" id="step5-form">
+                    <div class="mb-3">
+                        <label for="selected_threat5" class="form-label">Выберите угрозу</label>
+                        <select class="form-control" id="selected_threat5" name="selected_threat5" required onchange="loadThreatRelevance()">
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}" data-relevance="{{ threat.is_relevant if threat.is_relevant is not none else 'false' }}">{{ threat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Информационные активы</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="info_conf" name="info_conf" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="info_conf">К (Конфиденциальность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="info_int" name="info_int" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="info_int">Ц (Целостность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="info_av" name="info_av" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="info_av">Д (Доступность)</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Аппаратные средства</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="hw_conf" name="hw_conf" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="hw_conf">К (Конфиденциальность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="hw_int" name="hw_int" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="hw_int">Ц (Целостность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="hw_av" name="hw_av" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="hw_av">Д (Доступность)</label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Программные средства</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="sw_conf" name="sw_conf" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="sw_conf">К (Конфиденциальность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="sw_int" name="sw_int" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="sw_int">Ц (Целостность)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="sw_av" name="sw_av" onchange="updateRelevanceStatus()">
+                            <label class="form-check-label" for="sw_av">Д (Доступность)</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Статус актуальности угрозы -->
+                    <div class="alert" id="relevance-status" style="display: none;">
+                        <strong>Статус актуальности угрозы:</strong>
+                        <span id="relevance-text"></span>
+                    </div>
+                    
+                    <!-- Чекбокс актуальности угрозы -->
+                    <div class="mb-3 form-check">
+                        <input class="form-check-input" type="checkbox" id="is_relevant_step5" name="is_relevant_step5">
+                        <label class="form-check-label" for="is_relevant_step5"><strong>Актуальная угроза</strong> <small class="text-muted">(будет отображаться в выборе для анализа)</small></label>
+                    </div>
+                    
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(1)">Назад</button>
+                    <button type="button" class="btn btn-primary" onclick="handleStep5Next()">Далее</button>
+                </form>
+                
+                <script>
+                // Добавляем функцию для сохранения состояния чекбоксов шага 5
+                function saveStep5Data() {
+                    const threatId = document.getElementById('selected_threat5').value;
+                    if (!threatId) {
+                        console.log('Угроза не выбрана, пропускаем сохранение данных шага 5');
+                        return;
+                    }
+                    
+                    // Собираем состояние чекбоксов
+                    const checkboxes = [
+                        'info_conf', 'info_int', 'info_av',
+                        'hw_conf', 'hw_int', 'hw_av',
+                        'sw_conf', 'sw_int', 'sw_av'
+                    ];
+                    
+                    const step5Data = {};
+                    checkboxes.forEach(id => {
+                        const checkbox = document.getElementById(id);
+                        if (checkbox) {
+                            step5Data[id] = checkbox.checked;
+                        }
+                    });
+                    
+                    // Отправляем данные на сервер
+                    fetch(`/api/threats/${threatId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            step5: JSON.stringify(step5Data)
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Данные шага 5 сохранены:', data);
+                    })
+                    .catch(error => {
+                        console.error('Ошибка сохранения данных шага 5:', error);
+                    });
+                }
+                
+                // Вызываем сохранение при изменении любого чекбокса
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (currentStep === 5) {
+                        const checkboxes = [
+                            'info_conf', 'info_int', 'info_av',
+                            'hw_conf', 'hw_int', 'hw_av',
+                            'sw_conf', 'sw_int', 'sw_av'
+                        ];
+                        
+                        checkboxes.forEach(id => {
+                            const checkbox = document.getElementById(id);
+                            if (checkbox) {
+                                checkbox.addEventListener('change', saveStep5Data);
+                            }
+                        });
+                    }
+                });
+                </script>
+                
+                {% elif step == 6 %}
+                <h5>Перечень актуальных угроз ИБ активов</h5>
+                
+                <div id="asset-selection" class="mb-3">
+                    <h6>Выберите активы для включения в таблицу</h6>
+                    <div id="assets-list"></div>
+                    <button class="btn btn-success" onclick="confirmAssetSelection()">Подтвердить выбор</button>
+                </div>
+
+                <div id="table-container" style="display: none;">
+                </div>
+
+                <div class="mt-3">
+                    <button class="btn btn-secondary" onclick="prevStep(5)">Назад</button>
+                    <button class="btn btn-primary" id="next-button" style="display: none;" onclick="nextStep(7)">Далее</button>
+                </div>
+                
+                {% elif step == 7 %}
+                <h5>Оценка признака "Источник угрозы ИБ"</h5>
+                <form method="POST" id="step7-form">
+                    <div class="mb-3">
+                        <label for="selected_threat7" class="form-label">Выберите угрозу</label>
+                        <select class="form-control" id="selected_threat7" name="selected_threat7" required>
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}">{{ threat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Статическая таблица с описанием признаков -->
+                    <div class="mb-4">
+                        <h6>Критерии оценки признака "Источник угрозы ИБ"</h6>
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Признак</th>
+                                    <th>1 балл</th>
+                                    <th>2 балла</th>
+                                    <th>3 балла</th>
+                                    <th>4 балла</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Мотивация ИУ</td>
+                                    <td>отсутствует</td>
+                                    <td></td>
+                                    <td></td>
+                                    <td>присутствует</td>
+                                </tr>
+                                <tr>
+                                    <td>Квалификация ИУ</td>
+                                    <td>отсутствие знаний и навыков в области информатизации и в области ИБ</td>
+                                    <td>знания и навыки в области информатизации и в области ИБ на уровне пользователя</td>
+                                    <td>владение языками программирования, знания и навыки администрирования системного и прикладного ПО, знание технологий и протоколов в области ИБ, информатизации и телекоммуникаций, знания и навыки использования средств и систем защиты и организационных мер по обеспечению ИБ</td>
+                                    <td>знания и навыки на уровне разработчика компонентов, средств, систем, технологий и протоколов в области ИБ, информатизации и телекоммуникаций</td>
+                                </tr>
+                                <tr>
+                                    <td>Ресурсы ИУ</td>
+                                    <td>используются ресурсы физического лица</td>
+                                    <td>используются ресурсы группы лиц, небольшой организации</td>
+                                    <td>используются ресурсы средней/большой организации или действуют природные и/или техногенные факторы преодолимой силы</td>
+                                    <td>осуществляется поддержка ИУ на уровне государства или действуют природные и/или техногенные факторы непреодолимой силы (стихийные бедствия, техногенные катастрофы)</td>
+                                </tr>
+                                <tr>
+                                    <td>Расположение ИУ относительно области применения УР ИБ</td>
+                                    <td>внешнее</td>
+                                    <td>внутреннее</td>
+                                    <td></td>
+                                    <td>внешнее и внутреннее</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Таблица для ввода оценок -->
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Признак</th>
+                                <th>1 балл</th>
+                                <th>2 балла</th>
+                                <th>3 балла</th>
+                                <th>4 балла</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Мотивация ИУ</td>
+                                <td><input type="radio" name="motivation" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="motivation" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="motivation" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="motivation" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Квалификация ИУ</td>
+                                <td><input type="radio" name="qualification" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="qualification" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="qualification" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="qualification" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Ресурсы ИУ</td>
+                                <td><input type="radio" name="resources" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="resources" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="resources" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="resources" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Расположение ИУ относительно области применения УРИБ</td>
+                                <td><input type="radio" name="location" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="location" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="location" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="location" value="4" class="form-check-input"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="mb-3">
+                        <label for="assessment_result" class="form-label">Оценка признака "Источник угрозы ИБ"</label>
+                        <input type="number" class="form-control" id="assessment_result" name="assessment_result" step="0.0001" min="0" max="1" placeholder="Введите оценку">
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(6)">Назад</button>
+                    <button type="button" class="btn btn-warning" onclick="calculateSourceAssessment()">Рассчитать автоматически</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(9)">Далее</button>
+                </form>
+                
+                {% elif step == 9 %}
+                <h5>Критерии оценки вероятности реализации угрозы</h5>
+                <form method="POST" id="step9-form">
+                    <div class="mb-3">
+                        <label for="selected_threat9" class="form-label">Выберите угрозу</label>
+                        <select class="form-control" id="selected_threat9" name="selected_threat9" required onchange="autoFillSourceThreatFromStep7()">
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}">{{ threat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Статическая таблица с описанием критериев -->
+                    <div class="mb-4">
+                        <h6>Критерии оценки вероятности реализации угрозы</h6>
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Признак</th>
+                                    <th>1 балл</th>
+                                    <th>2 балла</th>
+                                    <th>3 балла</th>
+                                    <th>4 балла</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Продолжительность и непрерывность реализации угрозы</td>
+                                    <td>кратковременная</td>
+                                    <td>непрерывная непродолжительная или длительная прерывная</td>
+                                    <td></td>
+                                    <td>длительная непрерывная</td>
+                                </tr>
+                                <tr>
+                                    <td>Возможность обнаружения реализации угрозы ИБ</td>
+                                    <td>легко</td>
+                                    <td>трудно</td>
+                                    <td>очень трудно</td>
+                                    <td>невозможно</td>
+                                </tr>
+                                <tr>
+                                    <td>Возможность нейтрализации угрозы ИБ</td>
+                                    <td>легко</td>
+                                    <td>трудно</td>
+                                    <td>очень трудно</td>
+                                    <td>невозможно</td>
+                                </tr>
+                                <tr>
+                                    <td>Источник угрозы ИБ</td>
+                                    <td>I = 1/4</td>
+                                    <td>1/4 < I ≤ 1/2</td>
+                                    <td>1/2 < I ≤ 3/4</td>
+                                    <td>3/4 < I ≤ 1</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Таблица для ввода оценок -->
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Признак</th>
+                                <th>1 балл</th>
+                                <th>2 балла</th>
+                                <th>3 балла</th>
+                                <th>4 балла</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Продолжительность и непрерывность реализации угрозы</td>
+                                <td><input type="radio" name="duration" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Возможность обнаружения реализации угрозы ИБ</td>
+                                <td><input type="radio" name="detectability" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Возможность нейтрализации угрозы ИБ</td>
+                                <td><input type="radio" name="neutralization" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Источник угрозы ИБ</td>
+                                <td><input type="radio" name="source" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="4" class="form-check-input"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <!-- Статическая таблица с качественными и количественными значениями -->
+                    <div class="mb-4">
+                        <h6>Качественные и количественные значения оценки вероятности</h6>
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Качественное значение</th>
+                                    <th>Количественное значение</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Минимальная</td>
+                                    <td>[0,25; 0,4]</td>
+                                </tr>
+                                <tr>
+                                    <td>Средняя</td>
+                                    <td>(0,4; 0,7]</td>
+                                </tr>
+                                <tr>
+                                    <td>Высокая</td>
+                                    <td>(0,7; 1]</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="probability_assessment" class="form-label">Оценка вероятности реализации угрозы</label>
+                        <input type="number" class="form-control" id="probability_assessment" name="probability_assessment" step="0.0001" min="0" max="1" placeholder="Введите оценку">
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(7)">Назад</button>
+                    <button type="button" class="btn btn-warning" onclick="calculateProbabilityAssessment()">Рассчитать автоматически</button>
+                    <button type="button" class="btn btn-primary" onclick="goToThreatSelection()">Далее</button>
+                </form>
+                
+                {% elif step == 10 %}
+                <h5>Критерии оценки вероятности реализации угрозы</h5>
+                <form method="POST" id="step10-form">
+                    <div class="mb-3">
+                        <label for="selected_threat10" class="form-label">Выберите угрозу</label>
+                        <select class="form-control" id="selected_threat10" name="selected_threat10" required>
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}">{{ threat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Признак</th>
+                                <th>1 балл</th>
+                                <th>2 балла</th>
+                                <th>3 балла</th>
+                                <th>4 балла</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Продолжительность и непрерывность реализации угрозы</td>
+                                <td><input type="radio" name="duration" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="duration" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Возможность обнаружения реализации угрозы ИБ</td>
+                                <td><input type="radio" name="detectability" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="detectability" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Возможность нейтрализации угрозы ИБ</td>
+                                <td><input type="radio" name="neutralization" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="neutralization" value="4" class="form-check-input"></td>
+                            </tr>
+                            <tr>
+                                <td>Источник угрозы ИБ</td>
+                                <td><input type="radio" name="source" value="1" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="2" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="3" class="form-check-input"></td>
+                                <td><input type="radio" name="source" value="4" class="form-check-input"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(9)">Назад</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(11)">Далее</button>
+                </form>
+                
+                {% elif step == 11 %}
+                <h5>Расчет вероятности реализации угрозы</h5>
+                <form method="POST" id="step11-form">
+                    <div class="mb-3">
+                        <label for="selected_threat11" class="form-label">Выберите угрозу</label>
+                        <select class="form-control" id="selected_threat11" name="selected_threat11" required>
+                            <option value="">Выберите угрозу...</option>
+                            {% for threat in threats %}
+                            <option value="{{ threat.id }}">{{ threat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="probability_result" class="form-label">Оценка вероятности реализации угрозы</label>
+                        <input type="number" class="form-control" id="probability_result" name="probability_result" step="0.0001" min="0" max="1" placeholder="Введите оценку">
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(9)">Назад</button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(12)">Далее</button>
+                </form>
+                
+                {% elif step == 12 %}
+                <h5>Оценка вероятности реализации угрозы для каждого актива</h5>
+                <form method="POST" id="step12-form">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="selected_asset12" class="form-label">Выберите актив</label>
+                            <select class="form-control" id="selected_asset12" name="selected_asset12" required>
+                                <option value="">Выберите актив...</option>
+                                {% for asset in assets %}
+                                <option value="{{ asset.id }}">{{ asset.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="selected_threat12" class="form-label">Выберите угрозу</label>
+                            <select class="form-control" id="selected_threat12" name="selected_threat12" required>
+                                <option value="">Выберите угрозу...</option>
+                                {% for threat in threats %}
+                                <option value="{{ threat.id }}">{{ threat.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_probability" class="form-label">Оценка вероятности реализации</label>
+                        <input type="number" class="form-control" id="asset_probability" name="asset_probability" step="0.0001" min="0" max="1" placeholder="Введите вероятность">
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(11)">Назад</button>
+                    <button type="button" class="btn btn-success" onclick="finishWizard()">Завершить</button>
+                </form>
+                
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStep = parseInt("{{ step|default(0) }}");
+
+// Функция для создания новой угрозы
+function createNewThreat() {
+    const newThreatName = document.getElementById('new_threat_name').value;
+    if (!newThreatName.trim()) {
+        alert('Пожалуйста, введите название новой угрозы');
+        return;
+    }
+
+    // Создаем новую угрозу
+    const newThreatData = {
+        name: newThreatName,
+        description: document.getElementById('new_threat_description').value,
+        source: document.getElementById('new_threat_source').value,
+        target_object: document.getElementById('new_threat_target').value,
+        confidentiality_violation: document.getElementById('new_confidentiality_violation').checked ? 1 : 0,
+        integrity_violation: document.getElementById('new_integrity_violation').checked ? 1 : 0,
+        availability_violation: document.getElementById('new_availability_violation').checked ? 1 : 0,
+        imported_from_bdu: false,
+        is_relevant: false
+    };
+
+    fetch('/api/threats/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newThreatData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        localStorage.setItem('selectedThreatId', data.id);
+        window.location.href = '/threats/add-wizard/1?edit_threat_id=' + data.id;
+    })
+    .catch(error => {
+        console.error('Ошибка создания угрозы:', error);
+        alert('Ошибка при создании угрозы');
+    });
+}
+
+// Обработчики для шагов 1-4 (показ информации об угрозе)
+function setupThreatInfoHandler(stepNum, selectId, descId, sourceId, targetId, consequencesId) {
+    const selectElement = document.getElementById(selectId);
+    if (!selectElement) return; // Если элемент не найден, выходим
+    
+    selectElement.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+            const descElement = document.getElementById(descId);
+            const sourceElement = document.getElementById(sourceId);
+            const targetElement = document.getElementById(targetId);
+            const consequencesElement = document.getElementById(consequencesId);
+            
+            if (descElement) descElement.value = selectedOption.dataset.description || '';
+            if (sourceElement) sourceElement.value = selectedOption.dataset.source || '';
+            if (targetElement) targetElement.value = selectedOption.dataset.target || '';
+            
+            let consequences = '';
+            if (selectedOption.dataset.conf === '1') consequences += 'Нарушение конфиденциальности<br>';
+            if (selectedOption.dataset.int === '1') consequences += 'Нарушение целостности<br>';
+            if (selectedOption.dataset.avail === '1') consequences += 'Нарушение доступности';
+            
+            if (consequencesElement) {
+                consequencesElement.innerHTML = consequences;
+                const infoElement = document.getElementById('threat-info' + (stepNum > 1 ? stepNum : ''));
+                if (infoElement) infoElement.style.display = 'block';
+            }
+        } else {
+            const descElement = document.getElementById(descId);
+            const sourceElement = document.getElementById(sourceId);
+            const targetElement = document.getElementById(targetId);
+            const consequencesElement = document.getElementById(consequencesId);
+            
+            if (descElement) descElement.value = '';
+            if (sourceElement) sourceElement.value = '';
+            if (targetElement) targetElement.value = '';
+            if (consequencesElement) consequencesElement.innerHTML = '';
+            
+            const infoElement = document.getElementById('threat-info' + (stepNum > 1 ? stepNum : ''));
+            if (infoElement) infoElement.style.display = 'none';
+        }
+    });
+}
+
+// Установка обработчиков для шага 1
+setupThreatInfoHandler(1, 'selected_threat', 'description', 'source', 'target', 'consequences');
+
+// После загрузки страницы, автоматически выбираем сохраненную угрозу для соответствующих шагов
+document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем параметр из URL или localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlThreatId = urlParams.get('edit_threat_id');
+    const savedThreatId = localStorage.getItem('selectedThreatId');
+
+    const threatIdToUse = urlThreatId || savedThreatId;
+
+    if (threatIdToUse) {
+        // Используем setTimeout для обеспечения загрузки элементов
+        setTimeout(function() {
+            if (currentStep === 1) {
+                const selectElement = document.getElementById('selected_threat');
+                if (selectElement) {
+                    selectElement.value = threatIdToUse;
+                    // Симулируем изменение, чтобы обновить информацию об угрозе
+                    const event = new Event('change');
+                    selectElement.dispatchEvent(event);
+                }
+            } else if (currentStep >= 5 && currentStep <= 11 && currentStep !== 9) {
+                const selectId = 'selected_threat' + currentStep;
+                const selectElement = document.getElementById(selectId);
+                if (selectElement) {
+                    selectElement.value = threatIdToUse;
+                }
+            } else if (currentStep === 12) {
+                const selectElement = document.getElementById('selected_threat12');
+                if (selectElement) {
+                    selectElement.value = threatIdToUse;
+                }
+            }
+        }, 100); // Небольшая задержка для загрузки элементов
+    }
+});
+
+// Глобальные переменные для шага 6
+let selectedAssets = [];
+let allThreats = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Для шага 6 загружаем данные для таблицы
+    if (currentStep === 6) {
+        loadAssetsForStep6();
+        loadThreatsForStep6();
+    }
+    
+    // Загрузка активов для шага 12
+    if (currentStep === 12) {
+        loadAssetsForStep12();
+    }
+});
+
+// Загрузка активов для шага 6
+function loadAssetsForStep6() {
+    // Словарь для перевода типов активов
+    const typeTranslations = {
+        'information': 'Информационный',
+        'software': 'Программный',
+        'hardware': 'Аппаратный'
+    };
+    
+    fetch('/api/assets/')
+        .then(response => response.json())
+        .then(assets => {
+            const container = document.getElementById('assets-list');
+            if (container) {
+                container.innerHTML = '';
+                assets.forEach(asset => {
+                    const translatedType = typeTranslations[asset.type] || asset.type;
+                    const div = document.createElement('div');
+                    div.className = 'form-check';
+                    div.innerHTML = `
+                        <input class="form-check-input" type="checkbox" id="asset-${asset.id}" value="${asset.id}">
+                        <label class="form-check-label" for="asset-${asset.id}">
+                            ${asset.name} (${translatedType})
+                        </label>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+        })
+        .catch(error => console.error('Ошибка загрузки активов:', error));
+}
+
+// Загрузка угроз для шага 6
+function loadThreatsForStep6() {
+    fetch('/api/threats/')
+        .then(response => response.json())
+        .then(threats => {
+            allThreats = threats;
+        })
+        .catch(error => console.error('Ошибка загрузки угроз:', error));
+}
+
+// Подтверждение выбора активов для шага 6
+function confirmAssetSelection() {
+    selectedAssets = [];
+    document.querySelectorAll('#assets-list input[type="checkbox"]:checked').forEach(cb => {
+        selectedAssets.push(parseInt(cb.value));
+    });
+    
+    if (selectedAssets.length === 0) {
+        alert('Выберите хотя бы один актив');
+        return;
+    }
+    
+    const assetSelection = document.getElementById('asset-selection');
+    if (assetSelection) assetSelection.style.display = 'none';
+    
+    buildThreatTable();
+    
+    const nextBtn = document.getElementById('next-button');
+    if (nextBtn) nextBtn.style.display = 'inline-block';
+}
+
+// Функция для сохранения связей актив-угроза
+function saveAssetThreatMapping() {
+    const assetThreatMappings = [];
+    
+    // Проходим по всем селектам угроз
+    document.querySelectorAll('select[data-asset]').forEach(select => {
+        const assetId = parseInt(select.getAttribute('data-asset'));
+        const selectedThreatIds = Array.from(select.selectedOptions).map(option => parseInt(option.value));
+        
+        selectedThreatIds.forEach(threatId => {
+            assetThreatMappings.push({
+                asset_id: assetId,
+                threat_id: threatId
+            });
+        });
+    });
+    
+    // Сохраняем в localStorage для использования в таблице
+    localStorage.setItem('assetThreatMappings', JSON.stringify(assetThreatMappings));
+    console.log('Сохранены связи актив-угроза:', assetThreatMappings);
+}
+
+// Построение таблицы угроз для активов
+function buildThreatTable() {
+    const assetPromises = selectedAssets.map(assetId => fetch(`/api/assets/${assetId}`).then(r => r.json()));
+    
+    Promise.all(assetPromises).then(assets => {
+        // Группировка по типу
+        const grouped = {};
+        assets.forEach(asset => {
+            const type = asset.type;
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push(asset);
+        });
+        
+        buildGroupedThreatTables(grouped);
+    }).catch(error => {
+        console.error('Ошибка загрузки активов:', error);
+        alert('Ошибка загрузки активов: ' + error);
+    });
+}
+
+function buildGroupedThreatTables(grouped) {
+    const container = document.getElementById('table-container');
+    if (!container) {
+        console.error('table-container not found');
+        alert('Элемент table-container не найден');
+        return;
+    }
+    container.innerHTML = '';
+    
+    // Словарь для перевода типов активов
+    const typeTranslations = {
+        'information': 'Информационные активы',
+        'software': 'Программные средства',
+        'hardware': 'Аппаратные средства'
+    };
+    
+    for (const [type, assets] of Object.entries(grouped)) {
+        const translatedType = typeTranslations[type] || type;
+        const section = document.createElement('div');
+        section.className = 'mb-4';
+        section.innerHTML = `<h6>${translatedType}</h6>`;
+        
+        const table = document.createElement('table');
+        table.className = 'table table-bordered';
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th>Актив</th>
+                    <th>Угрозы</th>
+                </tr>
+            </thead>
+            <tbody id="tbody-${type.replace(/\s/g, '-')}">
+            </tbody>
+        `;
+        
+        const tbody = table.querySelector('tbody');
+        assets.forEach(asset => {
+            const row = document.createElement('tr');
+            
+            // Актив
+            const assetCell = document.createElement('td');
+            assetCell.innerHTML = `<strong>${asset.name}</strong><br><small>${asset.description || ''}</small>`;
+            row.appendChild(assetCell);
+            
+            // Угрозы
+            const threatCell = document.createElement('td');
+            const threatSelect = document.createElement('select');
+            threatSelect.className = 'form-select';
+            threatSelect.multiple = true;
+            threatSelect.setAttribute('data-asset', asset.id);
+            threatSelect.innerHTML = '<option value="">Выберите угрозы...</option>' +
+                allThreats.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            threatSelect.onchange = () => {
+                saveAssetThreatMapping();
+            };
+            threatCell.appendChild(threatSelect);
+            row.appendChild(threatCell);
+            
+            tbody.appendChild(row);
+        });
+        
+        section.appendChild(table);
+        container.appendChild(section);
+    }
+    
+    const tableContainer = document.getElementById('table-container');
+    if (tableContainer) tableContainer.style.display = 'block';
+}
+
+// Загрузка активов для шага 12
+function loadAssetsForStep12() {
+    fetch('/api/assets/')
+        .then(response => response.json())
+        .then(assets => {
+            const assetSelect12 = document.getElementById('selected_asset12');
+            if (assetSelect12) {
+                assetSelect12.innerHTML = '<option value="">Выберите актив...</option>';
+                assets.forEach(asset => {
+                    const option = document.createElement('option');
+                    option.value = asset.id;
+                    option.textContent = asset.name;
+                    assetSelect12.appendChild(option);
+                });
+            }
+        })
+        .catch(error => console.error('Ошибка загрузки активов:', error));
+}
+
+function nextStep(step) {
+    // Проверяем, все ли обязательные поля заполнены
+    if (!validateStep(currentStep)) {
+        return;
+    }
+
+    // Сохраняем данные текущего шага
+    saveStepData(currentStep);
+
+    // Если текущий шаг 0, используем createNewThreat вместо перехода
+    if (currentStep === 0) {
+        createNewThreat();
+        return;
+    }
+
+    // Переходим к следующему шагу
+    window.location.href = `/threats/add-wizard/${step}`;
+}
+
+function prevStep(step) {
+    // Сохраняем данные текущего шага
+    saveStepData(currentStep);
+    
+    // Если возвращаемся на шаг 0, нужно очистить сохранённые данные
+    if (step === 0) {
+        localStorage.removeItem('selectedThreatId');
+    }
+    
+    // Переходим к предыдущему шагу
+    window.location.href = `/threats/add-wizard/${step}`;
+}
+
+function validateStep(step) {
+    // Валидация для каждого шага
+    switch(step) {
+        case 0:
+            return document.getElementById('new_threat_name').value.trim() !== '';
+        case 1:
+            return document.getElementById('selected_threat').value !== '';
+        case 5:
+            return document.getElementById('selected_threat5').value !== '';
+        case 6:
+            // Проверяем, что таблица построена (есть кнопка "Далее")
+            const nextBtn = document.getElementById('next-button');
+            return nextBtn && nextBtn.style.display !== 'none';
+        case 7:
+            return document.getElementById('selected_threat7').value !== '';
+        case 8:
+            return document.getElementById('selected_threat8').value !== '';
+        case 9:
+            return document.getElementById('selected_threat9').value !== '';
+        case 10:
+            return document.getElementById('selected_threat10').value !== '';
+        case 11:
+            return document.getElementById('selected_threat11').value !== '';
+        case 12:
+            return document.getElementById('selected_asset12').value !== '' && document.getElementById('selected_threat12').value !== '';
+        default:
+            return true;
+    }
+}
+
+// Функция для обработки перехода с шага 5
+function handleStep5Next() {
+    if (!validateStep(5)) {
+        return;
+    }
+
+    const selectedThreatId = document.getElementById('selected_threat5').value;
+    if (!selectedThreatId) {
+        alert('Пожалуйста, выберите угрозу');
+        return;
+    }
+
+    // Сохраняем состояние чекбокса "Актуальная угроза"
+    const isRelevantCheckbox = document.getElementById('is_relevant_step5');
+    const isRelevant = isRelevantCheckbox ? isRelevantCheckbox.checked : false;
+    
+    // Сохраняем статус актуальности на сервере
+    saveThreatRelevance(selectedThreatId, isRelevant);
+
+    // Проверяем актуальность угрозы
+    if (isRelevant) {
+        // Если угроза актуальная, переходим к шагу 6
+        nextStep(6);
+    } else {
+        // Если угроза неактуальная, переходим к списку угроз
+        localStorage.removeItem('selectedThreatId');
+        window.location.href = '/threats';
+    }
+}
+
+function saveStepData(step) {
+    // Здесь можно сохранить данные шага в localStorage или отправить на сервер
+    // Пока что просто логируем
+    console.log('Сохранение данных шага', step);
+    
+    // Для шага 0 сохраняем выбранные данные
+    if (step === 0) {
+        const actionChoice = document.getElementById('action_choice').value;
+        if (actionChoice === 'existing') {
+            const selectedThreat = document.getElementById('selected_existing_threat').value;
+            if (selectedThreat) {
+                localStorage.setItem('selectedThreatId', selectedThreat);
+            }
+        }
+    }
+}
+
+function finishWizard() {
+    // Сохраняем последние данные и завершаем процесс
+    saveStepData(currentStep);
+    localStorage.removeItem('selectedThreatId'); // Очищаем сохраненные данные
+    alert('Процесс редактирования угрозы завершен!');
+    window.location.href = '/threats';
+}
+
+// Функция для расчета оценки источника угрозы
+function calculateSourceAssessment() {
+    const selectedThreat = document.getElementById('selected_threat7').value;
+    if (!selectedThreat) {
+        alert('Пожалуйста, выберите угрозу');
+        return;
+    }
+
+    // Получаем значения из радиокнопок
+    const motivation = document.querySelector('input[name="motivation"]:checked');
+    const qualification = document.querySelector('input[name="qualification"]:checked');
+    const resources = document.querySelector('input[name="resources"]:checked');
+    const location = document.querySelector('input[name="location"]:checked');
+
+    if (!motivation || !qualification || !resources || !location) {
+        alert('Пожалуйста, заполните все 4 признака');
+        return;
+    }
+
+    // Суммируем баллы и делим на 16
+    const totalScore = parseInt(motivation.value) + parseInt(qualification.value) +
+                      parseInt(resources.value) + parseInt(location.value);
+    const assessment = totalScore / 16;
+
+    // Записываем результат в поле
+    document.getElementById('assessment_result').value = assessment.toFixed(4);
+
+    // Сохраняем в базу данных
+    saveSourceAssessment(selectedThreat, assessment, {
+        motivation: motivation.value,
+        qualification: qualification.value,
+        resources: resources.value,
+        location: location.value
+    });
+}
+
+function saveSourceAssessment(threatId, assessment, scores) {
+    const data = {
+        threat_id: threatId,
+        assessment: assessment,
+        scores: scores
+    };
+
+    fetch('/api/threats/source-assessment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        showNotification('Оценка признака "Источник угрозы ИБ" сохранена', 'success');
+    })
+    .catch(error => {
+        console.error('Ошибка сохранения оценки:', error);
+        showNotification('Ошибка при сохранении оценки', 'danger');
+    });
+}
+
+function loadSourceAssessment() {
+    const selectedThreatId = document.getElementById('selected_threat8').value;
+    console.log('Selected threat ID:', selectedThreatId);
+    
+    if (!selectedThreatId) {
+        document.getElementById('assessment_result').value = '';
+        return;
+    }
+
+    fetch(`/api/threats/${selectedThreatId}`)
+        .then(response => response.json())
+        .then(threat => {
+            console.log('Threat data:', threat);
+            console.log('Source assessment:', threat.source_assessment);
+            
+            if (threat.source_assessment) {
+                try {
+                    const assessmentData = JSON.parse(threat.source_assessment);
+                    console.log('Parsed assessment data:', assessmentData);
+                    document.getElementById('assessment_result').value = assessmentData.assessment || '';
+                } catch (e) {
+                    console.error('Ошибка парсинга данных оценки:', e);
+                    document.getElementById('assessment_result').value = '';
+                }
+            } else {
+                console.log('No source assessment found');
+                document.getElementById('assessment_result').value = '';
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки оценки источника угрозы:', error);
+            document.getElementById('assessment_result').value = '';
+        });
+}
+
+// Функция для расчета оценки вероятности реализации угрозы
+function calculateProbabilityAssessment() {
+    const selectedThreat = document.getElementById('selected_threat9').value;
+    if (!selectedThreat) {
+        alert('Пожалуйста, выберите угрозу');
+        return;
+    }
+
+    // Получаем значения из радиокнопок
+    const duration = document.querySelector('input[name="duration"]:checked');
+    const detectability = document.querySelector('input[name="detectability"]:checked');
+    const neutralization = document.querySelector('input[name="neutralization"]:checked');
+    const source = document.querySelector('input[name="source"]:checked');
+
+    if (!duration || !detectability || !neutralization || !source) {
+        alert('Пожалуйста, заполните все 4 критерия');
+        return;
+    }
+
+    // Суммируем баллы и делим на 16
+    const totalScore = parseInt(duration.value) + parseInt(detectability.value) +
+                      parseInt(neutralization.value) + parseInt(source.value);
+    const assessment = totalScore / 16;
+
+    // Записываем результат в поле
+    document.getElementById('probability_assessment').value = assessment.toFixed(4);
+
+    // Сохраняем в базу данных
+    saveProbabilityAssessment(selectedThreat, assessment, {
+        duration: duration.value,
+        detectability: detectability.value,
+        neutralization: neutralization.value,
+        source: source.value
+    });
+}
+
+function saveProbabilityAssessment(threatId, assessment, scores) {
+    const data = {
+        threat_id: threatId,
+        assessment: assessment,
+        scores: scores
+    };
+
+    fetch('/api/threats/probability-assessment', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        showNotification('Оценка вероятности реализации угрозы сохранена', 'success');
+    })
+    .catch(error => {
+        console.error('Ошибка сохранения оценки:', error);
+        showNotification('Ошибка при сохранении оценки', 'danger');
+    });
+}
+
+function goToThreatSelection() {
+    // Проверяем, все ли обязательные поля заполнены
+    if (!validateStep(currentStep)) {
+        return;
+    }
+
+    // Сохраняем данные текущего шага
+    saveStepData(currentStep);
+
+    // Переходим к списку угроз
+    window.location.href = '/threats';
+}
+
+// Обновляем прогресс-бар
+document.addEventListener('DOMContentLoaded', function() {
+    const progressBar = document.getElementById('progress-bar');
+    const progress = ((currentStep > 1 ? currentStep - 3 : currentStep) / 9) * 100;
+    progressBar.style.width = progress + '%';
+    progressBar.textContent = Math.round(progress) + '%';
+    
+    // Для шага 5 добавляем обработчики для проверки актуальности
+    if (currentStep === 5) {
+        // Если есть выбранная угроза, загружаем её статус
+        const selectedThreat = document.getElementById('selected_threat5');
+        if (selectedThreat && selectedThreat.value) {
+            loadThreatRelevance();
+        }
+    }
+    
+    // Для шага 9 добавляем обработчик для автозаполнения при выборе угрозы
+    if (currentStep === 9) {
+        const selectedThreat = document.getElementById('selected_threat9');
+        if (selectedThreat) {
+            selectedThreat.addEventListener('change', function() {
+                if (this.value) {
+                    autoFillSourceThreatFromStep7();
+                }
+            });
+        }
+    }
+});
+
+// Функция для обновления статуса актуальности при изменении чекбоксов
+function updateRelevanceStatus() {
+    console.log('updateRelevanceStatus called');
+    const selectedThreat = document.getElementById('selected_threat5');
+    if (!selectedThreat || !selectedThreat.value) {
+        hideRelevanceStatus();
+        return;
+    }
+    
+    // Проверяем все чекбоксы
+    const checkboxes = [
+        'info_conf', 'info_int', 'info_av',
+        'hw_conf', 'hw_int', 'hw_av',
+        'sw_conf', 'sw_int', 'sw_av'
+    ];
+    
+    let hasRelevance = false;
+    checkboxes.forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox && checkbox.checked) {
+            hasRelevance = true;
+        }
+    });
+    
+    console.log('Has relevance:', hasRelevance);
+    
+    // Обновляем отображение
+    updateRelevanceDisplay(hasRelevance);
+    
+    // Сохраняем в базу данных
+    saveThreatRelevance(selectedThreat.value, hasRelevance);
+    
+    // Также сохраняем состояние чекбоксов в step5
+    saveStep5Data();
+}
+
+// Загрузка статуса актуальности выбранной угрозы
+function loadThreatRelevance() {
+    console.log('Loading threat relevance...');
+    const selectedThreat = document.getElementById('selected_threat5');
+    if (!selectedThreat || !selectedThreat.value) {
+        console.log('No threat selected, hiding status');
+        hideRelevanceStatus();
+        return;
+    }
+    
+    console.log('Selected threat ID:', selectedThreat.value);
+    
+    // Загружаем данные угрозы с сервера для получения is_relevant
+    fetch(`/api/threats/${selectedThreat.value}`)
+        .then(response => response.json())
+        .then(threat => {
+            const checkbox = document.getElementById('is_relevant_step5');
+            if (checkbox && threat.is_relevant !== undefined) {
+                checkbox.checked = threat.is_relevant;
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки данных угрозы:', error);
+        });
+    
+    // Проверяем актуальность на основе текущих чекбоксов
+    updateRelevanceStatus();
+}
+
+// Обновление отображения статуса актуальности
+function updateRelevanceDisplay(isRelevant) {
+    const statusDiv = document.getElementById('relevance-status');
+    const statusText = document.getElementById('relevance-text');
+    
+    if (!statusDiv || !statusText) return;
+    
+    if (isRelevant) {
+        statusDiv.className = 'alert alert-success';
+        statusText.textContent = 'Угроза является актуальной (выбраны соответствующие типы активов и свойства ИБ)';
+    } else {
+        statusDiv.className = 'alert alert-warning';
+        statusText.textContent = 'Угроза НЕ является актуальной (не выбраны соответствующие типы активов и свойства ИБ)';
+    }
+    
+    statusDiv.style.display = 'block';
+}
+
+// Скрытие статуса актуальности
+function hideRelevanceStatus() {
+    const statusDiv = document.getElementById('relevance-status');
+    if (statusDiv) {
+        statusDiv.style.display = 'none';
+    }
+}
+
+// Сохранение статуса актуальности угрозы
+function saveThreatRelevance(threatId, isRelevant) {
+    const data = {
+        is_relevant: isRelevant
+    };
+    
+    fetch(`/api/threats/${threatId}/relevance`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Статус актуальности угрозы сохранен');
+    })
+    .catch(error => {
+        console.error('Ошибка сохранения статуса актуальности:', error);
+    });
+}
+
+// Автоматическое заполнение строки "Источник угрозы ИБ" на основе значения из шага 7
+function autoFillSourceThreatFromStep7() {
+    const selectedThreat = document.getElementById('selected_threat9');
+    
+    if (!selectedThreat || !selectedThreat.value) {
+        console.log('Угроза не выбрана');
+        return;
+    }
+    
+    const threatId = selectedThreat.value;
+    console.log(`Загружаем данные для угрозы ID: ${threatId}`);
+    
+    // Загружаем оценку источника угрозы из шага 7
+    fetch(`/api/threats/${threatId}`)
+        .then(response => response.json())
+        .then(threat => {
+            console.log('Данные угрозы загружены:', threat);
+            
+            if (threat.source_assessment) {
+                try {
+                    const assessmentData = JSON.parse(threat.source_assessment);
+                    const sourceValue = assessmentData.assessment;
+                    
+                    console.log('Значение source_assessment:', sourceValue);
+                    
+                    if (sourceValue !== undefined && sourceValue !== null) {
+                        // Определяем балл на основе значения
+                        let score;
+                        if (sourceValue <= 0.25) {
+                            score = 1;
+                        } else if (sourceValue <= 0.5) {
+                            score = 2;
+                        } else if (sourceValue <= 0.75) {
+                            score = 3;
+                        } else {
+                            score = 4;
+                        }
+                        
+                        console.log(`Определен балл: ${score} для значения: ${sourceValue}`);
+                        
+                        // Сбрасываем все радиокнопки и выбираем нужную
+                        const sourceRadios = document.querySelectorAll('input[name="source"]');
+                        sourceRadios.forEach(radio => {
+                            radio.checked = false;
+                        });
+                        
+                        const sourceRadio = document.querySelector(`input[name="source"][value="${score}"]`);
+                        if (sourceRadio) {
+                            sourceRadio.checked = true;
+                            console.log(`Автоматически установлен балл ${score} для источника угрозы (значение: ${sourceValue})`);
+                        } else {
+                            console.error(`Радиокнопка со значением ${score} не найдена`);
+                        }
+                    } else {
+                        console.log('Значение source_assessment отсутствует или null');
+                    }
+                } catch (e) {
+                    console.error('Ошибка парсинга данных оценки источника угрозы:', e);
+                }
+            } else {
+                console.log('Поле source_assessment отсутствует в данных угрозы');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки оценки источника угрозы:', error);
+        });
+}
+</script>
+{% endblock %}

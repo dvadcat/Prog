@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Оценка уязвимостей{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2>Оценка уязвимостей активов</h2>
+
+        <div id="tables-container">
+            <!-- Таблицы будут загружаться через JavaScript -->
+        </div>
+
+        <button class="btn btn-success" onclick="finishAssessment()">Завершить</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadAssessmentTables();
+});
+
+function loadAssessmentTables() {
+    const scale = JSON.parse(localStorage.getItem('vulnerability_scale') || '[]');
+    const tableData = JSON.parse(localStorage.getItem('vulnerability_table') || '[]');
+
+    if (scale.length === 0 || tableData.length === 0) {
+        document.getElementById('tables-container').innerHTML = '<div class="alert alert-warning">Данные не найдены</div>';
+        return;
+    }
+
+    const assetIds = tableData.map(item => item.asset_id);
+    const vulIds = [...new Set(tableData.flatMap(item => item.vulnerabilities))];
+
+    Promise.all([
+        ...assetIds.map(id => fetch(`/api/assets/${id}`).then(r => r.json())),
+        ...vulIds.map(id => fetch(`/api/vulnerabilities/${id}`).then(r => r.json()))
+    ]).then(results => {
+        const assets = results.slice(0, assetIds.length);
+        const vulnerabilities = results.slice(assetIds.length);
+
+        const assetMap = {};
+        assets.forEach(asset => assetMap[asset.id] = asset);
+
+        const vulMap = {};
+        vulnerabilities.forEach(vul => vulMap[vul.id] = vul);
+
+        // Группировка по типу
+        const grouped = {};
+        tableData.forEach(item => {
+            const asset = assetMap[item.asset_id];
+            const type = asset.type;
+            if (!grouped[type]) grouped[type] = [];
+            grouped[type].push({ ...asset, selectedVulnerabilities: item.vulnerabilities });
+        });
+
+        buildTables(grouped, scale, vulMap);
+    });
+}
+
+function buildTables(grouped, scale, vulMap) {
+    const container = document.getElementById('tables-container');
+    container.innerHTML = '';
+
+    // Словарь для перевода типов активов
+    const typeTranslations = {
+        'information': 'информационных активов',
+        'software': 'программных средств',
+        'hardware': 'аппаратных средств',
+        'personnel': 'персонала',
+        'facility': 'объектов недвижимости',
+        'network': 'сетевых активов',
+        'data': 'данных',
+        'service': 'услуг'
+    };
+
+    for (const [type, assetList] of Object.entries(grouped)) {
+        const table = document.createElement('div');
+        table.className = 'mb-5';
+        const translatedType = typeTranslations[type] || type;
+        table.innerHTML = `<h4>Оценка уязвимостей ${translatedType}</h4>`;
+
+        const tableEl = document.createElement('table');
+        tableEl.className = 'table table-bordered';
+        const translatedTypeHeader = typeTranslations[type] || type;
+        tableEl.innerHTML = `
+            <thead>
+                <tr>
+                    <th>${translatedTypeHeader}</th>
+                    ${assetList.map(a => `<th>${a.name}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Строки для уязвимостей -->
+            </tbody>
+        `;
+
+        // Собираем все уникальные уязвимости для этого типа
+        const vulnerabilities = new Set();
+        assetList.forEach(asset => {
+            asset.selectedVulnerabilities.forEach(v => vulnerabilities.add(v));
+        });
+
+        const tbody = tableEl.querySelector('tbody');
+        Array.from(vulnerabilities).forEach(vulId => {
+            const vul = vulMap[vulId];
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${vul.name}</td>`;
+            assetList.forEach(asset => {
+                const hasVul = asset.selectedVulnerabilities.includes(vulId);
+                if (hasVul) {
+                    const select = document.createElement('select');
+                    select.className = 'form-select';
+                    select.innerHTML = `<option value="">-</option>` + scale.map((s, i) => `<option value="${i}">${s.name}</option>`).join('');
+                    select.onchange = () => saveAssessment(asset.id, vulId, select.value);
+                    row.appendChild(document.createElement('td')).appendChild(select);
+                } else {
+                    row.innerHTML += '<td>-</td>';
+                }
+            });
+            tbody.appendChild(row);
+        });
+
+        table.appendChild(tableEl);
+        container.appendChild(table);
+    }
+}
+
+function saveAssessment(assetId, vulId, levelIndex) {
+    // Сохранить оценку, например, в localStorage или на сервер
+    const key = `assessment_${assetId}_${vulId}`;
+    localStorage.setItem(key, levelIndex);
+}
+
+function finishAssessment() {
+    showNotification('Оценка завершена', 'success');
+    // Можно перейти к отчету или чему-то
+}
+</script>
+{% endblock %}

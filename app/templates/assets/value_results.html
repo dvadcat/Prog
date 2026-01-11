@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Результаты определения ценности активов{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>Результаты определения ценности активов</h2>
+            <p><strong>Результаты определения ценности активов:</strong></p>
+            
+            <div class="card">
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Тип актива</th>
+                                <th>Актив</th>
+                                <th>Ценность актива</th>
+                            </tr>
+                        </thead>
+                        <tbody id="value-results-body">
+                            <!-- Результаты будут загружены через JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadValueResults();
+});
+
+function loadValueResults() {
+    fetch('/api/asset-value-results/')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.getElementById('value-results-body');
+            tbody.innerHTML = '';
+            
+            data.forEach(result => {
+                const asset = result.asset;
+                const row = document.createElement('tr');
+                
+                let assetTypeText = '';
+                switch(asset.type) {
+                    case 'information':
+                        assetTypeText = 'Информационные активы';
+                        break;
+                    case 'software':
+                        assetTypeText = 'Программные средства';
+                        break;
+                    case 'hardware':
+                        assetTypeText = 'Аппаратные средства';
+                        break;
+                    default:
+                        assetTypeText = asset.type;
+                }
+                
+                row.innerHTML = `
+                    <td>${assetTypeText}</td>
+                    <td>${asset.name}</td>
+                    <td>${asset.final_value || 'Не определена'}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        })
+        .catch(error => {
+            console.error('Ошибка загрузки результатов:', error);
+        });
+}
+</script>
+{% endblock %}
